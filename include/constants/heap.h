@@ -125,7 +125,7 @@ enum HeapID {
     HEAP_ID_LIBRARY_TV,
     HEAP_ID_PARTY_MENU1,
     HEAP_ID_PARTY_MENU2,
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     HEAP_ID_FIELD_SCENERY,
 #endif
     HEAP_ID_MAX,

@@ -119,3 +119,9 @@ compile_commands.json
 # Optional resources extracted from the player's BW2 ROM
 /bw2/
 
+
+# Nintendo Switch port
+/build_nx*/
+/build_nx*.log
+/nx_deps
+/nx_meta/*.nacp

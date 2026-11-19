@@ -3,7 +3,8 @@ ppwlobby_public_includes = include_directories('include')
 
 ppwlobby_c_args = [
     '-fpermissive',
-    '-std=c++03'
+    # NX: libnx headers (pulled in via nitro/types.h) need C++11
+    (build_target == 'nx' ? '-std=gnu++11' : '-std=c++03')
 ]
 
 # Libraries

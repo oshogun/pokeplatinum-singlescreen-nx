@@ -1,6 +1,6 @@
 #include "g3d_pipeline.h"
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
 #include "bwbattle/bw_adapter.h"
 #endif
 
@@ -28,7 +28,7 @@ G3DPipelineBuffers *G3DPipeline_InitEx(enum HeapID heapID, enum VramManagerType 
     G3_SwapBuffers(GX_SORTMODE_AUTO, GX_BUFFERMODE_W);
 
     if (texVramManagerType == VRAM_MANAGER_TYPE_LINKED_LIST) {
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
         // Widescreen field traversal keeps more map/NPC textures resident than
         // the DS bank budget permits. Preserve its physical banks and use the
         // simulator's extended storage for the additional textures.

@@ -45,7 +45,7 @@
 #include <simulator/config/config_check.h>
 #include <simulator/sim.h>
 #include <stdlib.h>
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
 #include "port/assets/map_patches.h"
 #include "port/assets/rom_setup.h"
 #endif
@@ -53,6 +53,8 @@
 #include "port/gui/sim_icon.h"
 #endif
 #endif
+
+void NX_BootTrace(const char *);  // sim_main.cpp (no-op off NX)
 
 #define RESET_COMBO (PAD_BUTTON_START | PAD_BUTTON_SELECT | PAD_BUTTON_L | PAD_BUTTON_R)
 
@@ -106,10 +108,14 @@ void NitroMain(void)
     SetPokeplatinumAppIcon();
     #endif
 #endif
+    NX_BootTrace("game: InitSystem");
     InitSystem();
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+    NX_BootTrace("game: InitSystem done");
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     RomSetup_AutoExtractBw2();
+    NX_BootTrace("game: map patches");
     MapPatches_Ensure();
+    NX_BootTrace("game: map patches done");
 #endif
     InitVRAM();
     InitKeypadAndTouchpad();
@@ -120,6 +126,7 @@ void NitroMain(void)
     InitRTC();
     InitApplication();
 
+    NX_BootTrace("game: fonts");
     Fonts_Init();
     Font_InitManager(FONT_SYSTEM, HEAP_ID_APPLICATION);
     Font_InitManager(FONT_MESSAGE, HEAP_ID_APPLICATION);
@@ -170,6 +177,9 @@ void NitroMain(void)
     sForce30Hz = FALSE;
 #endif
 
+#ifdef SDK_PORT
+    BOOL sNxTickWaited = FALSE;  // this tick already showed its picture
+#endif
     while (TRUE) {
 #ifdef SDK_PORT
         SIM_Set3DAntialiasing(myConfig->antialias3D);
@@ -198,8 +208,14 @@ void NitroMain(void)
              && (!FrameRate_Is60Fps() || sForce30Hz)
 #endif
             ) {
+#ifdef SDK_PORT
+                SIM_HintDuplicateVBlank();  // the tick's picture is drawn at its last vblank
+#endif
                 OS_WaitIrq(TRUE, OS_IE_V_BLANK);
                 gSystem.vblankCounter++;
+#ifdef SDK_PORT
+                sNxTickWaited = !SIM_LastVBlankSkipped();  // drawn: the next vblank repeats it
+#endif
             }
         }
 
@@ -208,6 +224,10 @@ void NitroMain(void)
         sub_020241CC();
         SysTaskManager_ExecuteTasks(gSystem.printTaskMgr);
 
+#ifdef SDK_PORT
+        if (sNxTickWaited) SIM_HintDuplicateVBlank();
+        sNxTickWaited = FALSE;
+#endif
         OS_WaitIrq(TRUE, OS_IE_V_BLANK);
 
         gSystem.vblankCounter++;

@@ -1,0 +1,22 @@
+diff --git a/meson.build b/meson.build
+index 0bf1115..4748e7c 100644
+--- a/meson.build
++++ b/meson.build
+@@ -55,7 +55,7 @@ add_project_arguments(c_args,
+ else
+ add_project_arguments(c_args,
+     language: 'c',
+-    native: true
++    native: build_target != 'nx'  # NX: cross
+ )
+ endif
+ 
+@@ -111,7 +111,7 @@ add_project_arguments(nitrodwc_args,
+ else
+ add_project_arguments(nitrodwc_args,
+     language: 'c',
+-    native: true
++    native: build_target != 'nx'  # NX: cross
+ )
+ endif
+ 

@@ -12,7 +12,7 @@ typedef struct {
     s16 unk_00;
     s16 unk_02;
     vs16 unk_04;
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     u64 textureLoadMicros;
 #endif
     vu16 unk_06;

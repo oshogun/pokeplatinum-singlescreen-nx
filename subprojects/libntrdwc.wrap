@@ -3,6 +3,8 @@ url = https://github.com/elyro1/libntrdwc.git
 revision = lib_libntrdwc
 depth = 1
 directory = libntrdwc
+# Nintendo Switch port changes (see README)
+diff_files = libntrdwc-nx.patch
 
 [provide]
 dependency_names = NitroDWC

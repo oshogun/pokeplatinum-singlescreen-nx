@@ -3,6 +3,8 @@ url = https://github.com/elyro1/libntrsystem.git
 revision = lib_libntrsystem
 depth = 1
 directory = libntrsystem
+# Nintendo Switch port changes (see README)
+diff_files = libntrsystem-nx.patch
 
 [provide]
 dependency_names = NitroSystem

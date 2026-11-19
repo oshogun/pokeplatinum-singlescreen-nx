@@ -123,7 +123,7 @@ MapPropAnimationManager *MapPropAnimationManager_New(void)
     return MapPropAnimationManager_Alloc(HEAP_ID_FIELD1);
 }
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
 MapPropAnimationManager *MapPropAnimationManager_NewOnHeap(enum HeapID heapID)
 {
     return MapPropAnimationManager_Alloc(heapID);
@@ -343,7 +343,7 @@ BOOL MapPropAnimationManager_AddAllAnimationsToRenderObj(const int mapPropModelI
     return res;
 }
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
 void MapPropAnimationManager_AddPreviewAnimations(int modelID, NNSG3dRenderObj *renderObj, MapPropAnimationManager *manager)
 {
     if (!manager || modelID >= MapPropAnimationManager_GetAnimeListNARCFileCount(manager)) {

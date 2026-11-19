@@ -166,7 +166,7 @@ void PlayerAvatar_MoveMain(PlayerAvatar *playerAvatar, const LandDataManager *la
         return;
     }
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     if (dir >= 0 && dir < 4) {
         static const int dx[] = { 0, 0, -1, 1 }, dz[] = { -1, 1, 0, 0 };
         int x = PlayerAvatar_GetXPos(playerAvatar), z = PlayerAvatar_GetZPos(playerAvatar);

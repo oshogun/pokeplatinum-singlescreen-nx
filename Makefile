@@ -6,6 +6,7 @@
 	format        \
 	linux         \
 	linux-asan    \
+	nx            \
 	meson         \
 	mingw         \
 	purge         \
@@ -26,10 +27,12 @@ BUILD ?= build
 BUILD_LINUX ?= $(BUILD)_linux
 BUILD_LINUX_ASAN ?= $(BUILD)_linux_asan
 BUILD_WIN64 ?= $(BUILD)_win64
+BUILD_NX ?= $(BUILD)_nx
 BUILD_DIRS := $(BUILD_LINUX) $(BUILD_LINUX_ASAN) $(BUILD_WIN64)
 ROOT_INI_LINUX := $(BUILD_LINUX)/root.ini
 ROOT_INI_LINUX_ASAN := $(BUILD_LINUX_ASAN)/root.ini
 ROOT_INI_WIN64 := $(BUILD_WIN64)/root.ini
+ROOT_INI_NX := $(BUILD_NX)/root.ini
 
 UNAME_S := $(shell uname -s)
 
@@ -54,6 +57,27 @@ target: $(BUILD_LINUX)/build.ninja
 
 linux: $(BUILD_LINUX)/build.ninja
 	$(MESON) compile -C $(BUILD_LINUX)
+
+# Nintendo Switch (homebrew .nro); run inside the cybervisi0n/pokeplatinum-build image
+nx: $(BUILD_NX)/build.ninja
+	$(MESON) compile -C $(BUILD_NX)
+
+$(BUILD_NX)/build.ninja: $(ROOT_INI_NX) | $(BUILD_NX) meson
+	$(MESON) setup \
+		-Dbuild_target=nx \
+		--native-file=meson/$(NATIVE) \
+		--native-file=$(ROOT_INI_NX) \
+		--cross-file=meson/cross_nx.ini \
+		$(NX_EXTRA_CROSS) \
+		--cross-file=$(ROOT_INI_NX) \
+		-- $(BUILD_NX)
+
+$(ROOT_INI_NX): | $(BUILD_NX)
+	echo "[constants]" > $@
+	echo "root = '$$PWD'" >> $@
+
+$(BUILD_NX):
+	mkdir -p -- $(BUILD_NX)
 
 # ASan + UBSan build in its own directory (docs/sanitizers.md)
 linux-asan: $(BUILD_LINUX_ASAN)/build.ninja

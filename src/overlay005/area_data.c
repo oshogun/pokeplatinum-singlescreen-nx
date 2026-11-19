@@ -45,7 +45,7 @@ static void AreaData_StripTextureData(void *resourceFile, NNSG3dResTex *texture)
 
 static enum HeapID AreaDataManager_Heap(const AreaDataManager *area)
 {
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     return area->heapID;
 #else
     return HEAP_ID_FIELD1;
@@ -57,7 +57,7 @@ static AreaDataManager *AreaDataManager_AllocOnHeap(int areaDataArchiveID, MapPr
     AreaDataManager *areaDataManager = Heap_Alloc(heapID, sizeof(AreaDataManager));
 
     MI_CpuClear8(areaDataManager, sizeof(AreaDataManager));
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     areaDataManager->areaDataArchiveID = areaDataArchiveID;
     areaDataManager->heapID = heapID;
 #endif
@@ -192,7 +192,7 @@ void AreaDataManager_Load(AreaDataManager *areaDataManager)
     AreaDataManager_FinishLoading(areaDataManager);
 }
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
 AreaDataManager *AreaDataManager_AllocPreview(int areaDataArchiveID, MapPropAnimationManager *animations, const AreaDataManager *owner)
 {
     AreaDataManager *area = AreaDataManager_AllocOnHeap(areaDataArchiveID, animations, HEAP_ID_FIELD_SCENERY);

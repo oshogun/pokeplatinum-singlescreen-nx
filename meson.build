@@ -9,6 +9,8 @@ project('pokeplatinum', ['c', 'cpp', 'nasm'],
 
 fs = import('fs')
 build_target = get_option('build_target')
+# NX: the game and its libraries are cross-built for the Switch; build tools stay native.
+game_native = build_target != 'nx'
 
 ############################################################
 ###                    INCLUDE PATHS                     ###
@@ -35,15 +37,27 @@ if get_option('tracy_enable')
     shared_args += '-DTRACY_ENABLE'
 endif
 
+if (build_target == 'nx')
+    shared_args += [ '-D__SWITCH__' ]
+    # NX: the .nro is PIE; build every cross target (incl. SDK subprojects) as PIC
+    add_global_arguments('-fPIC', language: ['c', 'cpp'], native: false)
+    add_global_arguments(['-D__SWITCH__',
+                          '-I/opt/devkitpro/portlibs/switch/include',
+                          '-I/opt/devkitpro/libnx/include'],
+        language: 'cpp',
+        native: false
+    )
+endif
+
 
 add_global_arguments(shared_args,
     language: 'c',
-    native: true
+    native: game_native
 )
 
 add_global_arguments(shared_args,
     language: 'cpp',
-    native: true
+    native: game_native
 )
 
 # Global so the SDK subprojects are instrumented too; -O1 keeps the game playable under ASan. The build tools get it
@@ -83,6 +97,10 @@ pokeplatinum_args += [
     '-D_POSIX_C_SOURCE=200809L'
 ]
 
+if (build_target == 'nx')
+    pokeplatinum_args += '-fPIC'
+endif
+
 if get_option('gdb_debugging')
     pokeplatinum_args += '-DGDB_DEBUGGING'
 endif
@@ -95,6 +113,19 @@ endif
 
 
 link_args = []
+if (build_target == 'nx')
+link_args = [
+    '-specs=/opt/devkitpro/libnx/switch.specs',
+    '-Wl,--wrap=threadCreate',  # NX: thread log / core override
+    '-Wl,--wrap=nwindowDequeueBuffer',  # NX: defer the swapchain release-fence wait
+    '-g',
+    '-march=armv8-a+crc+crypto',
+    '-mtune=cortex-a57',
+    '-mtp=soft',
+    '-fPIE',
+    '-Wl,-Map=main.map'
+]
+endif
 
 ############################################################
 ###                     DEPENDENCIES                     ###
@@ -212,7 +243,7 @@ trainer_ai_o = custom_target(
     output: 'trainer_ai_script.o',
     input: trainer_ai_ss,
     command: [
-        'as',
+        (build_target == 'nx' ? '/opt/devkitpro/devkitA64/bin/aarch64-none-elf-as' : 'as'),
         '-I', meson.global_source_root() / 'asm',
         '-I', meson.global_build_root(),
         '-o', '@OUTPUT@',
@@ -245,7 +276,7 @@ libport = static_library('port',
         ppwlobby_public_includes,
     ],
     dependencies: port_sdk_deps,
-    native: true
+    native: game_native
 )
 
 if (build_target == 'linux')
@@ -290,6 +321,50 @@ main = executable('main',
         link_args,
     ],
     native: true
+)
+endif
+if (build_target == 'nx')
+main = executable('main',
+    sources: [
+        pokeplatinum_c,
+        c_consts_generators,
+        naix_headers,
+        h_headers,
+        embed_headers,
+    ],
+    objects: [trainer_ai_o, libport.extract_all_objects(recursive: false)],
+    c_args: [
+        pokeplatinum_args,
+    ],
+    c_pch: 'include/pch/global_pch.h',
+    include_directories: [
+        public_includes,
+        libcrypto_public_includes,
+        libgds_public_includes,
+        libspl_public_includes,
+        ppwlobby_public_includes,
+    ],
+    dependencies: [
+        nitrosdk_dep,
+        nitrosystem_dep,
+        nitrowifi_dep,
+        nitrodwc_dep,
+        libvct_dep,
+    ],
+    link_with: [
+        libspl,
+        libbwbattle,
+        libcrypto_ov97,
+        libcrypto_static,
+        libgds,
+        libdwcenc,
+        libdwcppwlobby,
+        libdwcilobby,
+    ],
+    link_args: [
+        link_args,
+    ],
+    native: false
 )
 endif
 if (build_target == 'win64')

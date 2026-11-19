@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "pc_frame_profile.h"
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
 #include <math.h>
 #include <simulator/g3_draw.h>
 #include <stdio.h>
@@ -150,7 +150,7 @@ struct LandDataManager {
     int offsetAltitude;
     int offsetTileZ;
     VecFx32 offset;
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     PCPreparedCache *prepared;
 #endif
 };
@@ -246,7 +246,7 @@ static const MapLoadFunctions sMapLoadWithoutAttributesFns = {
     LandDataManager_LazyLoadWithoutAttributes
 };
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
 #define PC_PREPARED_COUNT 64
 #define PC_CHUNK_READY    5
 static void LandDataHeader_Load(NARC *, const int, LandDataHeader *);
@@ -1180,7 +1180,7 @@ static void LandDataManager_Load(const int mapMatrixIndex, const u8 loadedMapInd
     int landDataID = MapMatrix_GetLandDataIDByIndex(mapMatrixIndex, mapMatrix);
     LAND_DATA_LOADER_ASSERT_LAND_DATA_ID(landDataID);
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     if (landDataMan->prepared) {
         PCPrepareIndex((LandDataManager *)landDataMan, mapMatrixIndex, TRUE);
         if (PCChunkActivate((LandDataManager *)landDataMan, landDataMan->loadedMaps[loadedMapIndex], mapMatrixIndex)) {
@@ -1227,7 +1227,7 @@ static void LandDataManager_LoadWithoutAttributes(const int mapMatrixIndex, cons
     int landDataID = MapMatrix_GetLandDataIDByIndex(mapMatrixIndex, mapMatrix);
     LAND_DATA_LOADER_ASSERT_LAND_DATA_ID(landDataID);
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     if (landDataMan->prepared) {
         PCPrepareIndex((LandDataManager *)landDataMan, mapMatrixIndex, TRUE);
         if (PCChunkActivate((LandDataManager *)landDataMan, landDataMan->loadedMaps[loadedMapIndex], mapMatrixIndex)) {
@@ -1402,7 +1402,7 @@ void LandDataManager_Tick(FieldSystem *fieldSystem, LandDataManager *landDataMan
         }
     }
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     PCPrepareTick(landDataMan, fieldSystem, FALSE);
     PCAreasTick(landDataMan);
 #endif
@@ -1410,7 +1410,7 @@ void LandDataManager_Tick(FieldSystem *fieldSystem, LandDataManager *landDataMan
     switch (landDataMan->lazyLoaderSubTask) {
     case LAZY_LOADER_SUBTASK_LOAD_MAP:
         if (landDataMan->mapQuadrantsToCancelLazyLoad[activeLazyLoader->quadrants[activeLazyLoader->nextIndexToLoad]] != TRUE) {
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
             if (landDataMan->prepared && !landDataMan->inDistortionWorld) {
                 int next = activeLazyLoader->nextIndexToLoad;
                 if (!PCChunkActivate(landDataMan, activeLazyLoader->loadSlots[next], activeLazyLoader->mapMatrixIndexes[next])) {
@@ -1535,7 +1535,7 @@ static void LandDataManager_QueueLazyLoadMapPair(const int firstMapMatrixIndex, 
 
 static void LandDataManager_ResetLoadedMap(const u8 index, LandDataManager *landDataMan)
 {
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     LoadedMap *live = landDataMan->loadedMaps[index];
     PCPreparedChunk *chunk = PCChunkFind(landDataMan, live->mapMatrixIndex, FALSE);
     if (live->valid && live->mapPropManager && chunk && !chunk->area && chunk->map.mapPropManager) {
@@ -1894,7 +1894,7 @@ static void LandDataManager_QueueLazyLoadNextMapPair(const int trackedTargetMapM
 
 static void LandDataManager_RenderLoadedMap(const u8 index, const LandDataManager *landDataMan, ModelAttributes *const modelAttrs)
 {
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     PCPreparedChunk *preview = PCChunkFind((LandDataManager *)landDataMan, landDataMan->loadedMaps[index]->mapMatrixIndex, FALSE);
     if (preview && preview->area && preview->stage == PC_CHUNK_READY) {
         // The scenery pass draws this foreign chunk with its own resources.
@@ -2303,7 +2303,7 @@ LandDataManager *LandDataManager_New(MapMatrix *mapMatrix, AreaDataManager *area
     landDataMan->lazyLoaderSubTask = LAZY_LOADER_SUBTASK_IDLE;
     landDataMan->landDataNARC = NARC_ctor(NARC_INDEX_FIELDDATA__LAND_DATA__LAND_DATA, HEAP_ID_FIELD1);
     landDataMan->mapLoadedCb = NULL;
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     PCCacheCreate(landDataMan);
 #endif
     return landDataMan;
@@ -2311,7 +2311,7 @@ LandDataManager *LandDataManager_New(MapMatrix *mapMatrix, AreaDataManager *area
 
 void LandDataManager_InitialLoad(LandDataManager *landDataMan, const int playerTileX, const int playerTileZ)
 {
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     LandDataManager_UpdateTrackedTargetValues(playerTileX, playerTileZ, landDataMan->offsetTileX, landDataMan->offsetTileZ, landDataMan);
     PCPrepareTick(landDataMan, NULL, TRUE);
 #endif
@@ -2321,7 +2321,7 @@ void LandDataManager_InitialLoad(LandDataManager *landDataMan, const int playerT
 
 BOOL LandDataManager_CanEnterTile(const LandDataManager *landDataMan, int tileX, int tileZ)
 {
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     if (landDataMan->prepared && !landDataMan->inDistortionWorld) {
         int x = tileX - landDataMan->offsetTileX, z = tileZ - landDataMan->offsetTileZ;
         if (x < 0 || z < 0 || x >= landDataMan->mapMatrixWidthTiles || z >= landDataMan->mapMatrixHeight * 32) {
@@ -2346,7 +2346,7 @@ BOOL LandDataManager_CanEnterTile(const LandDataManager *landDataMan, int tileX,
 
 void LandDataManager_PrepareInitialView(FieldSystem *fieldSystem, LandDataManager *landDataMan)
 {
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     PCPrepareTick(landDataMan, fieldSystem, TRUE);
 #endif
 }
@@ -2376,7 +2376,7 @@ void LandDataManager_RenderLoadedMaps(const LandDataManager *landDataMan, ModelA
             LandDataManager_RenderLoadedMap(i, landDataMan, modelAttrs);
         }
     }
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     if (landDataMan->prepared && !landDataMan->inDistortionWorld) {
         PCPreparedCache *cache = landDataMan->prepared;
         for (int c = 0; c < PC_PREPARED_COUNT; c++) {
@@ -2431,7 +2431,7 @@ void LandData_ObjectPosToTilePos(fx32 objectPositionX, fx32 objectPositionZ, int
 
 void LandDataManager_End(LandDataManager *landDataMan)
 {
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     PCCacheFree(landDataMan);
 #endif
     ClearUnusedSystemCache();
@@ -2825,7 +2825,7 @@ LandDataManager *LandDataManager_DistortionWorldNew(MapMatrix *mapMatrix, AreaDa
         landDataMan->landDataNARC = NARC_ctor(NARC_INDEX_FIELDDATA__LAND_DATA__LAND_DATA, HEAP_ID_FIELD1);
     }
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     PCCacheCreate(landDataMan);
 #endif
     return landDataMan;
@@ -2833,7 +2833,7 @@ LandDataManager *LandDataManager_DistortionWorldNew(MapMatrix *mapMatrix, AreaDa
 
 void LandDataManager_DistortionWorldInit(LandDataManager *landDataMan, MapMatrix *mapMatrix, AreaDataManager *areaDataMan, NARC *landDataNARC)
 {
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     PCCacheFree(landDataMan);
 #endif
     landDataMan->areaDataMan = areaDataMan;
@@ -2852,14 +2852,14 @@ void LandDataManager_DistortionWorldInit(LandDataManager *landDataMan, MapMatrix
     if (landDataNARC == NULL) {
         landDataMan->landDataNARC = NARC_ctor(NARC_INDEX_FIELDDATA__LAND_DATA__LAND_DATA, HEAP_ID_FIELD1);
     }
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     PCCacheCreate(landDataMan);
 #endif
 }
 
 void LandDataManager_DistortionWorldEnd(LandDataManager *landDataMan)
 {
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     PCCacheFree(landDataMan);
 #endif
     for (u8 i = 0; i < QUADRANT_COUNT; i++) {
@@ -2935,7 +2935,7 @@ static void LandDataManager_DistortionWorldLoad(const int mapMatrixIndex, const 
 
     int landDataID = MapMatrix_GetLandDataIDByIndex(mapMatrixIndex, mapMatrix);
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     if (landDataMan->prepared) {
         PCPrepareIndex(landDataMan, mapMatrixIndex, TRUE);
         if (PCChunkActivate(landDataMan, landDataMan->loadedMaps[loadedMapIndex], mapMatrixIndex)) {
@@ -3188,7 +3188,7 @@ void LandDataManager_DistortionWorldTick(FieldSystem *fieldSystem, LandDataManag
         }
     }
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     // Fixed floors have a separate visibility and buffer-swap lifecycle. Only
     // prepare their explicitly queued destinations; never expand camera bounds.
     if (landDataMan->prepared && !landDataMan->ending) {
@@ -3208,7 +3208,7 @@ void LandDataManager_DistortionWorldTick(FieldSystem *fieldSystem, LandDataManag
     switch (landDataMan->lazyLoaderSubTask) {
     case LAZY_LOADER_SUBTASK_LOAD_MAP:
         if (landDataMan->mapQuadrantsToCancelLazyLoad[activeLazyLoader->quadrants[activeLazyLoader->nextIndexToLoad]] != TRUE) {
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
             if (landDataMan->prepared) {
                 int next = activeLazyLoader->nextIndexToLoad;
                 if (!PCChunkActivate(landDataMan, activeLazyLoader->loadSlots[next], activeLazyLoader->mapMatrixIndexes[next])) {
@@ -3304,7 +3304,7 @@ void LandDataManager_DistortionWorldTick(FieldSystem *fieldSystem, LandDataManag
 
 void LandDataManager_DistortionWorldInitWithoutNARC(LandDataManager *landDataMan, MapMatrix *mapMatrix, AreaDataManager *areaDataMan)
 {
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     PCCacheFree(landDataMan);
 #endif
     landDataMan->areaDataMan = areaDataMan;
@@ -3317,7 +3317,7 @@ void LandDataManager_DistortionWorldInitWithoutNARC(LandDataManager *landDataMan
 
     landDataMan->ending = FALSE;
     landDataMan->lazyLoaderSubTask = LAZY_LOADER_SUBTASK_IDLE;
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     PCCacheCreate(landDataMan);
 #endif
 }

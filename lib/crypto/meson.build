@@ -12,16 +12,16 @@ libcrypto_ov97_srcs = files(
 
 libcrypto_static = static_library('crypto_static',
     sources: libcrypto_static_srcs,
-    pic: false,
+    pic: not game_native,
     include_directories: libcrypto_public_includes,
     dependencies: nitrosdk_dep,
-    native: true
+    native: game_native
 )
 
 libcrypto_ov97 = static_library('crypto_ov97',
     sources: libcrypto_ov97_srcs,
-    pic: false,
+    pic: not game_native,
     include_directories: libcrypto_public_includes,
     dependencies: nitrosdk_dep,
-    native: true
+    native: game_native
 )

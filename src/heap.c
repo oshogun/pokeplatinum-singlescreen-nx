@@ -2,7 +2,7 @@
 
 #include <nitro.h>
 #include <string.h>
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
 #include <stdlib.h>
 #endif
 
@@ -130,12 +130,12 @@ static BOOL CreateHeapInternal(enum HeapID parent, enum HeapID child, u32 size, 
         NNSFndHeapHandle parentHeap = sHeapInfo.heapHandles[ptr[parent]];
         if (parentHeap != NNS_FND_HEAP_INVALID_HANDLE) {
             BOOL nativeScenery = FALSE;
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
             nativeScenery = child == HEAP_ID_FIELD_SCENERY;
 #endif
             // Additional visible areas must not consume the DS gameplay heap.
             void *newHeapAddr;
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
             if (nativeScenery) {
                 newHeapAddr = malloc(size);
             } else
@@ -160,7 +160,7 @@ static BOOL CreateHeapInternal(enum HeapID parent, enum HeapID child, u32 size, 
                 } else {
                     GF_ASSERT(FALSE);
                 }
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
                 if (nativeScenery) {
                     free(newHeapAddr);
                 }
@@ -189,7 +189,7 @@ void Heap_Destroy(enum HeapID heapID)
         u8 index = sHeapInfo.heapIdxs[heapID];
         NNSFndHeapHandle parentHeap = sHeapInfo.parentHeapHandles[index];
         void *childRaw = sHeapInfo.subHeapRawPtrs[index];
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
         if (heapID == HEAP_ID_FIELD_SCENERY) {
             free(childRaw);
         } else

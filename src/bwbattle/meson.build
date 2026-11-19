@@ -77,7 +77,7 @@ libbwbattle = static_library('bwbattle',
     # Only the SDK's headers and flags (without -w): the game links the SDK itself
     dependencies: port_sdk_deps,
     pic: true,
-    native: true
+    native: game_native
 )
 
 # Platinum's side of the interface, built with the game's own files

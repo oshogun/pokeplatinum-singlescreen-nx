@@ -3,6 +3,8 @@ url = https://github.com/elyro1/libntr.git
 revision = 10dea0979a8e2f7f4aae0d29b3c2b3e61ef56322
 depth = 1
 directory = libntr
+# Nintendo Switch port changes (see README)
+diff_files = libntr-nx.patch
 
 [provide]
 dependency_names = NitroSDK

@@ -15,7 +15,7 @@ typedef struct NARC {
     u32 fatbStart;
     u32 fimgStart;
     u16 numFiles;
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     enum NarcID narcID;
     const void *optionalData;
     unsigned int optionalSize;
@@ -165,7 +165,7 @@ void NARC_Seek(NARC *narc, u32 offset);
  */
 u16 NARC_GetFileCount(NARC *narc);
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
 void NARC_PreloadFieldArchives(void);
 BOOL NARC_InvalidateFieldArchives(void); // Only succeeds when no cached handles are open.
 u32 NARC_FieldCacheBytes(void);

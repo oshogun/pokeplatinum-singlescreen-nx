@@ -107,4 +107,11 @@ public:
     }
 };
 
+#if __cplusplus >= 201103L  // NX: stateless allocator, all instances are interchangeable
+template <class T, class U>
+inline bool operator==(const PPW_Allocator<T> &, const PPW_Allocator<U> &) { return true; }
+template <class T, class U>
+inline bool operator!=(const PPW_Allocator<T> &, const PPW_Allocator<U> &) { return false; }
+#endif
+
 #endif // ILOBBY_LOBBYBASE_H

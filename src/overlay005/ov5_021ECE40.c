@@ -34,7 +34,7 @@
 #include "resource_collection.h"
 #include "sys_task.h"
 #include "sys_task_manager.h"
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
 #include "field/field_system.h"
 #endif
 
@@ -1520,7 +1520,7 @@ int ov5_021EDF30(int param0)
 
 static BOOL ObjectEventGfxManager_TextureBudgetUsed(const UnkStruct_ov5_021ED0A4 *gfxManager)
 {
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     FieldSystem *field = MapObjectMan_FieldSystem(gfxManager->unk_104);
     // Major transitions already hide the scene. Drain initial graphics there
     // before applying the traversal budget to newly approaching neighbors.
@@ -1559,14 +1559,14 @@ static int ov5_021EDF3C(UnkStruct_ov5_021ED0A4 *param0, int param1, u32 param2, 
     }
 
     {
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
         u64 start = OS_TicksToMicroSeconds(OS_GetTick());
 #endif
         void *v3 = ov5_021EDCF4(param0, param2, 0);
 
         ov5_021EE0E8(param0, param1, v3, param3);
         v0->unk_04++;
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
         v0->textureLoadMicros += OS_TicksToMicroSeconds(OS_GetTick()) - start;
 #endif
         return 1;
@@ -1612,7 +1612,7 @@ static int ov5_021EDFF0(UnkStruct_ov5_021ED0A4 *param0, int param1)
     return 0;
 }
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
 static int ObjectEventGfxManager_TexturePriority(const UnkStruct_ov5_021ED0A4 *gfxManager, int graphicsID)
 {
     FieldSystem *field = MapObjectMan_FieldSystem(gfxManager->unk_104);
@@ -1650,7 +1650,7 @@ static void ov5_021EE030(SysTask *param0, void *param1)
 
     while ((v2->unk_04 < v2->unk_02) && !ObjectEventGfxManager_TextureBudgetUsed(v1) && v0 < v2->unk_00) {
         if (v3->unk_0C != NULL) {
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
             u64 start = OS_TicksToMicroSeconds(OS_GetTick());
             // Visible/nearby billboards take precedence over distant neighbors.
             UnkStruct_ov5_021EDFBC *best = v3;
@@ -1676,7 +1676,7 @@ static void ov5_021EE030(SysTask *param0, void *param1)
             ov5_021EE0E8(v1, v3->unk_04, v4, v3->unk_08);
             v3->unk_0C = NULL;
             v2->unk_04++;
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
             v2->textureLoadMicros += OS_TicksToMicroSeconds(OS_GetTick()) - start;
 #endif
         }
@@ -1704,7 +1704,7 @@ static void ov5_021EE030(SysTask *param0, void *param1)
     }
 
     v2->unk_04 = 0;
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     v2->textureLoadMicros = 0;
 #endif
 }

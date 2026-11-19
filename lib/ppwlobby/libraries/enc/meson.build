@@ -6,7 +6,7 @@ libdwcenc = static_library('dwcenc',
     include_directories: ppwlobby_public_includes,
     dependencies: [nitrosdk_dep, nitrodwc_dep, nitrowifi_dep],
     pic: false,
-    native: true
+    native: game_native
 )
 
 libdwcenc_dep = declare_dependency(

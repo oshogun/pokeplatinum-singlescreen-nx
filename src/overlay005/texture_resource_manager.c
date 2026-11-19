@@ -62,7 +62,7 @@ FieldTextureManager *TextureResourceManager_Create(void)
     return TextureResourceManager_Alloc(HEAP_ID_FIELD1);
 }
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
 FieldTextureManager *TextureResourceManager_CreateOnHeap(enum HeapID heapID)
 {
     return TextureResourceManager_Alloc(heapID);

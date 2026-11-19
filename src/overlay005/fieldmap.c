@@ -199,7 +199,7 @@ static BOOL FieldMap_Init(ApplicationManager *appMan, int *state)
             }
         }
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
         NARC_PreloadFieldArchives();
 #endif
         Heap_Create(HEAP_ID_APPLICATION, HEAP_ID_FIELD1, fieldSystem->mapLoadMode->unk_04);
@@ -267,7 +267,7 @@ static BOOL FieldMap_Main(ApplicationManager *appMan, int *param1)
     FieldSystem *fieldSystem = ApplicationManager_Args(appMan);
 
     PC_PROFILE_BEGIN(fieldProfile);
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     SIM_ProfileContext(PlayerAvatar_GetXPos(fieldSystem->playerAvatar), PlayerAvatar_GetZPos(fieldSystem->playerAvatar), fieldSystem->location->mapHeaderID, MapMatrix_GetMatrixID(fieldSystem->mapMatrix), PlayerAvatar_GetSpeed(fieldSystem->playerAvatar));
 #endif
     if (FieldSystem_UpdateLocationToPlayerPosition(fieldSystem)) {

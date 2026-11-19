@@ -35,7 +35,7 @@ typedef struct AreaDataManager {
     AreaDataManagerLoadData *loadData;
     // Note: the first element is the size of this array
     u16 *mapPropModelIDs;
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
     int areaDataArchiveID;
     enum HeapID heapID;
 #endif
@@ -53,7 +53,7 @@ u8 AreaDataManager_GetAreaLightArchiveID(const AreaDataManager *areaDataManager)
 int AreaDataManager_GetMapPropModelID(const AreaDataManager *areaDataManager, const int index);
 BOOL AreaDataManager_HasMapPropModelFile(const AreaDataManager *areaDataManager, const int mapPropModelID);
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
 AreaDataManager *AreaDataManager_AllocPreview(int areaDataArchiveID, MapPropAnimationManager *animations, const AreaDataManager *owner);
 // Load one resource group/prop per step without changing global field graphics.
 typedef enum AreaPreviewLoadResult {

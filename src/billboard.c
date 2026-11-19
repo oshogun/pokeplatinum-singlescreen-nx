@@ -8,7 +8,7 @@
 
 #ifdef SDK_PORT
 #include "port/visuals/frame_rate.h"
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
 #include <simulator/sim.h>
 #endif
 #include "port/visuals/field_visual_effects.h"
@@ -734,7 +734,7 @@ static void UpdateMaterialTextureAddresses(NNSG3dResMat *material, const NNSG3dR
 
     for (int i = 0; i < texToMatDict->numIdx; i++) {
         NNSG3dResMatData *materialData = NNS_G3dGetMatDataByIdx(material, *(texMaterials + i));
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
         // An extended address is encoded as an ID, so frame offsets must be
         // applied to the decoded byte address rather than to that ID.
         u32 parameter = materialData->texImageParam;

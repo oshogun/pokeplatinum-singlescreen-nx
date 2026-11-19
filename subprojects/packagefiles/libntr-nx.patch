@@ -1,0 +1,1489 @@
+diff --git a/include/nitro/gx/g3imm.h b/include/nitro/gx/g3imm.h
+index aab1031..fcdf41b 100644
+--- a/include/nitro/gx/g3imm.h
++++ b/include/nitro/gx/g3imm.h
+@@ -18,7 +18,7 @@ extern "C" {
+ #include <simulator/drawmsg.h>
+ #include <simulator/queue.h>
+ extern SIM_queue_t * drawQueuePtr;
+-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
++#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
+ u32 SIM_EncodeTextureAddress(u32 parameter, u32 baseAddress);
+ #endif
+ #endif
+@@ -440,7 +440,7 @@ static inline void G3_TexImageParam (GXTexFmt texFmt,
+     msg = (draw_msg_t*)malloc( sizeof( draw_msg_t ) );
+ 
+     msg->type = DRAW_CMD_G3_TEXIMAGEPARAM;
+-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
++#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
+     // Textures past the DS's 512 KB live in the simulator's extended store, which the 16-bit address field can't
+     // reach; they are named by a virtual texture ID instead, as NitroSystem's models do
+     if (addr >= 0x80000) {
+diff --git a/include/simulator/sim.h b/include/simulator/sim.h
+index 392efdc..a53790b 100644
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -70,6 +70,10 @@ void * SIM_RenderInit(void * arg);
+ void SIM_SetInternalResolutionAfterRender(int scale);
+ // Applied after presentation; only the 3D target is multisampled.
+ void SIM_Set3DAntialiasing(BOOL enabled);
++// The next vblank repeats the current picture (30 fps tick); NX skips drawing it.
++void SIM_HintDuplicateVBlank(void);
++// TRUE if the last vblank was skipped after such a hint.
++BOOL SIM_LastVBlankSkipped(void);
+ int SIM_Get3DAntialiasingSamples(void);
+ void SIM_SetLightingCorrection(BOOL enabled);
+ // Analytic field primitives; zero restores ordinary model rendering.
+@@ -182,7 +186,7 @@ void SIM_ReleaseMainScreen(u32 frames);
+ // Moves a hold's first line, e.g. to 0 when the strip above it goes away too:
+ // those scanlines then show the snapshot's copy of them.
+ void SIM_SetHeldMainScreenFirstLine(u32 firstLine);
+-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
++#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
+ void SIM_ResetVirtualTextureAddresses(void);
+ void *SIM_GetExtendedTextureStorage(u32 address, u32 size);
+ u32 SIM_EncodeTextureAddress(u32 parameter, u32 baseAddress);
+diff --git a/include/simulator/sim_net.h b/include/simulator/sim_net.h
+index 6e9a035..8c01f01 100644
+--- a/include/simulator/sim_net.h
++++ b/include/simulator/sim_net.h
+@@ -4,6 +4,9 @@
+ #include <nitro.h>
+ #include <nitro/types.h>
+ 
++#ifdef __SWITCH__
++#include <sys/select.h>  // NX: enet/unix.h needs fd_set
++#endif
+ #include <enet/enet.h>
+ #include <SDL2/SDL.h>
+ 
+diff --git a/libraries/gx/src/gx_load3d.c b/libraries/gx/src/gx_load3d.c
+index 11888da..85bcc4c 100644
+--- a/libraries/gx/src/gx_load3d.c
++++ b/libraries/gx/src/gx_load3d.c
+@@ -1,4 +1,4 @@
+-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
++#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
+ #include <simulator/sim.h>
+ #endif
+ #include <nitro/gx/gx_load.h>
+@@ -185,7 +185,7 @@ sTexStartAddrTable[16] = {
+ 
+ void GX_LoadTexEx (GXVRamTex tex, const void *pSrc, u32 destSlotAddr, u32 szByte)
+ {
+-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
++#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
+     if (destSlotAddr >= 0x80000) {
+         void *destination = SIM_GetExtendedTextureStorage(destSlotAddr, szByte);
+         SDK_ASSERT(destination != NULL);
+@@ -253,7 +253,7 @@ void GX_BeginLoadTex (void)
+ 
+ void GX_LoadTex (const void *pSrc, u32 destSlotAddr, u32 szByte)
+ {
+-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
++#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
+     if (destSlotAddr >= 0x80000) {
+         void *destination = SIM_GetExtendedTextureStorage(destSlotAddr, szByte);
+         SDK_ASSERT(destination != NULL);
+diff --git a/libraries/sim/include/imgui_impl_opengl3_loader.h b/libraries/sim/include/imgui_impl_opengl3_loader.h
+index 34b262d..5992403 100644
+--- a/libraries/sim/include/imgui_impl_opengl3_loader.h
++++ b/libraries/sim/include/imgui_impl_opengl3_loader.h
+@@ -689,7 +689,12 @@ static GL3WglProc get_proc(const char *proc)
+     return res;
+ }
+ #else
++#if !defined(__SWITCH__) && !defined(SDK_BUILD_OUNCE)
+ #include <dlfcn.h>
++#endif
++#if defined(__SWITCH__)
++#include <SDL2/SDL.h>
++#endif
+ 
+ static void* libgl;  // OpenGL library
+ static void* libglx;  // GLX library
+@@ -698,6 +703,7 @@ static GL3WGetProcAddressProc gl_get_proc_address;
+ 
+ static void close_libgl(void)
+ {
++    #if !defined(__SWITCH__) && !defined(SDK_BUILD_OUNCE)
+     if (libgl) {
+         dlclose(libgl);
+         libgl = NULL;
+@@ -710,12 +716,15 @@ static void close_libgl(void)
+         dlclose(libglx);
+         libglx = NULL;
+     }
++    #endif
+ }
+ 
+ static int is_library_loaded(const char* name, void** lib)
+ {
+ #if defined(__HAIKU__)
+     *lib = NULL; // no support for RTLD_NOLOAD on Haiku.
++#elif defined(__PROSPERO__) || defined(__SWITCH__) || defined(SDK_BUILD_OUNCE)
++    return 1; // GL is static linked on PS5 and switch, PS5 and switch apps dont currently support dlopen
+ #else
+     *lib = dlopen(name, RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
+ #endif
+@@ -727,6 +736,10 @@ static int open_libs(void)
+     // On Linux we have two APIs to get process addresses: EGL and GLX.
+     // EGL is supported under both X11 and Wayland, whereas GLX is X11-specific.
+ 
++    #if defined(__PROSPERO__) || defined(__SWITCH__) || defined(SDK_BUILD_OUNCE)
++    return GL3W_OK;
++    #else
++
+     libgl = NULL;
+     libegl = NULL;
+     libglx = NULL;
+@@ -773,10 +786,14 @@ static int open_libs(void)
+         return GL3W_OK;
+ 
+     return GL3W_ERROR_LIBRARY_OPEN;
++    #endif
+ }
+ 
+ static int open_libgl(void)
+ {
++    #if defined(__PROSPERO__) || defined(__SWITCH__) || defined(SDK_BUILD_OUNCE)
++    return GL3W_OK;
++    #else
+     int res = open_libs();
+     if (res)
+         return res;
+@@ -794,10 +811,19 @@ static int open_libgl(void)
+     }
+ 
+     return GL3W_OK;
++    #endif
+ }
+ 
+ static GL3WglProc get_proc(const char* proc)
+ {
++    #if defined(__SWITCH__)
++    GL3WglProc res = NULL;  // NX: resolve through SDL (mesa/nouveau via EGL), like glad does
++    *(void**)(&res) = SDL_GL_GetProcAddress(proc);
++    return res;
++    #elif defined(__PROSPERO__) || defined(SDK_BUILD_OUNCE)
++    GL3WglProc res = NULL;
++    return res;
++    #else
+     GL3WglProc res = NULL;
+ 
+     // Before EGL version 1.5, eglGetProcAddress doesn't support querying core
+@@ -813,6 +839,7 @@ static GL3WglProc get_proc(const char* proc)
+         *(void**)(&res) = dlsym(libgl, proc);
+ 
+     return res;
++    #endif
+ }
+ #endif
+ 
+diff --git a/libraries/sim/src/ImGuiFileDialog/ImGuiFileDialog.cpp b/libraries/sim/src/ImGuiFileDialog/ImGuiFileDialog.cpp
+index 1093c72..f4a9683 100644
+--- a/libraries/sim/src/ImGuiFileDialog/ImGuiFileDialog.cpp
++++ b/libraries/sim/src/ImGuiFileDialog/ImGuiFileDialog.cpp
+@@ -26,6 +26,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
+ */
+ 
++#if defined(__SWITCH__)
++#ifndef _GNU_SOURCE
++#define _GNU_SOURCE 1  // NX: realpath
++#endif
++#include <stdlib.h>
++#include <strings.h>  // NX: strcasecmp
++#endif
+ #include "ImGuiFileDialog.h"
+ 
+ #ifdef __cplusplus
+@@ -90,7 +97,8 @@ SOFTWARE.
+     defined(__NetBSD__) || \
+     defined(__OpenBSD__) || \
+     defined(__APPLE__) ||\
+-    defined(__EMSCRIPTEN__)
++    defined(__EMSCRIPTEN__) || \
++    defined(__SWITCH__)
+ #define _IGFD_UNIX_
+ #define stricmp strcasecmp
+ #include <sys/types.h>
+diff --git a/libraries/sim/src/g3_draw.cpp b/libraries/sim/src/g3_draw.cpp
+index 5a2655a..44c8d70 100644
+--- a/libraries/sim/src/g3_draw.cpp
++++ b/libraries/sim/src/g3_draw.cpp
+@@ -778,7 +778,7 @@ static G3Texture *G3SIM_AcquireTexture() {
+ 
+ 	if (s_texImageParam.textureFormat != GX_TEXFMT_NONE) {
+         u8 *vramTex;
+-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
++#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
+         if (s_texImageParam.textureOffset >= 0x80000)
+             vramTex = (u8 *)SIM_GetExtendedTextureStorage(s_texImageParam.textureOffset, 0);
+         else
+diff --git a/libraries/sim/src/g3_handler.cpp b/libraries/sim/src/g3_handler.cpp
+index 3b18298..c6ba78a 100644
+--- a/libraries/sim/src/g3_handler.cpp
++++ b/libraries/sim/src/g3_handler.cpp
+@@ -1561,7 +1561,7 @@ void G3SIM_TexCoord(u32 data)
+ //TexImageParam
+ void G3SIM_TexImageParam(u32 data)
+ {
+-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
++#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
+     s_texImageParam.textureOffset = SIM_DecodeTextureAddress(&data);
+ #else
+     s_texImageParam.textureOffset = ((u16)data) << 3;
+diff --git a/libraries/sim/src/imgui/imgui.cpp b/libraries/sim/src/imgui/imgui.cpp
+index f7a3330..31a0c97 100644
+--- a/libraries/sim/src/imgui/imgui.cpp
++++ b/libraries/sim/src/imgui/imgui.cpp
+@@ -16354,7 +16354,7 @@ static void Platform_SetClipboardTextFn_DefaultImpl(ImGuiContext* ctx, const cha
+ #if defined(__APPLE__) && TARGET_OS_IPHONE
+ #define IMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS
+ #endif
+-#if defined(__3DS__)
++#if defined(__3DS__) || defined(__SWITCH__)  // NX: no fork/exec
+ #define IMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS
+ #endif
+ #if defined(_WIN32) && defined(IMGUI_DISABLE_WIN32_FUNCTIONS)
+diff --git a/libraries/sim/src/shaders/g2_fragment.glsl b/libraries/sim/src/shaders/g2_fragment.glsl
+index dbd8868..012fe1a 100644
+--- a/libraries/sim/src/shaders/g2_fragment.glsl
++++ b/libraries/sim/src/shaders/g2_fragment.glsl
+@@ -287,6 +287,10 @@ void main()
+             bgOrder[j] = a;
+         }
+     }
++    // Each layer's sample depends only on state fixed above; evaluate it once with a
++    // constant index (the loops below used to inline sampleBg/sampleObj per use).
++    vec4 bgS[4] = vec4[4](sampleBg(0), sampleBg(1), sampleBg(2), sampleBg(3));
++    vec4 objS[4] = vec4[4](sampleObj(0), sampleObj(1), sampleObj(2), sampleObj(3));
+     bool outside = uiCoord.x < 0.0 || uiCoord.x >= 1.0;
+     bool filler = singleScreen && fieldWidth == 256.0 && outside && !wideTrainerBanner && !wideUI
+         && menuBackgroundLayers == 0;
+@@ -298,15 +302,15 @@ void main()
+         int curPrio = bgPriorities[bgNum];
+         // Draw the OBJs that are at or below the current BG priority
+         for(int j=3-oamsDrawn; j>curPrio; j--) {
+-            if(sampleObj(j).a > 0.1) {
+-                color = sampleObj(j);
++            if(objS[j].a > 0.1) {
++                color = objS[j];
+                 currentBgDrawn = 4;
+             }
+             oamsDrawn++;
+         }
+         
+         // Draw the current bg
+-        if(sampleBg(bgNum).a > 0.0) {
++        if(bgS[bgNum].a > 0.0) {
+             // 3D BG0 uses per-pixel alpha even when it is not selected as a
+             // first target in BLDCNT, as in the default battle animation setup.
+             bool is3D = bgNum == 0 && bg0as3d != 0;
+@@ -319,29 +323,29 @@ void main()
+                 float alphaA = min(16.0, float(bldalpha & 31)) / 16.0;
+                 float alphaB = min(16.0, float((bldalpha >> 8) & 31)) / 16.0;
+                 if(bgNum == 0 && bg0as3d != 0) {
+-                    alphaA = sampleBg(0).a;
++                    alphaA = bgS[0].a;
+                     alphaB = 1.0 - alphaA;
+                 }
+                 if((currentBgDrawn < 4) && (((bldcnt >> (8+currentBgDrawn)) & 1) == 1) ) {
+-                    color.r = min(1.0, ((sampleBg(bgNum).r *alphaA) + (sampleBg(currentBgDrawn).r * alphaB)));
+-                    color.g = min(1.0, ((sampleBg(bgNum).g *alphaA) + (sampleBg(currentBgDrawn).g * alphaB)));
+-                    color.b = min(1.0, ((sampleBg(bgNum).b *alphaA) + (sampleBg(currentBgDrawn).b * alphaB)));
++                    color.r = min(1.0, ((bgS[bgNum].r *alphaA) + (bgS[currentBgDrawn].r * alphaB)));
++                    color.g = min(1.0, ((bgS[bgNum].g *alphaA) + (bgS[currentBgDrawn].g * alphaB)));
++                    color.b = min(1.0, ((bgS[bgNum].b *alphaA) + (bgS[currentBgDrawn].b * alphaB)));
+                     color.a = 1.0;
+                     currentBgDrawn = bgNum;
+                 } else if( (currentBgDrawn == 4) && ( ( (bldcnt >> (8+currentBgDrawn)) & 1) == 1) ){
+                     // Alpha blending where the highest OBJ pixel is the target
+-                    color.r = min(1.0, ( (sampleBg(bgNum).r *alphaA) + color.r * alphaB) );
+-                    color.g = min(1.0, ( (sampleBg(bgNum).g *alphaA) + color.g * alphaB) );
+-                    color.b = min(1.0, ( (sampleBg(bgNum).b *alphaA) + color.b * alphaB) );
++                    color.r = min(1.0, ( (bgS[bgNum].r *alphaA) + color.r * alphaB) );
++                    color.g = min(1.0, ( (bgS[bgNum].g *alphaA) + color.g * alphaB) );
++                    color.b = min(1.0, ( (bgS[bgNum].b *alphaA) + color.b * alphaB) );
+                     color.a = 1.0;
+                 } else if((currentBgDrawn == 5) && (((bldcnt >> (8+currentBgDrawn)) & 1) == 1)) {
+                     // Alpha blending where the backdrop is the target
+-                    color.r = min(1.0, ((sampleBg(bgNum).r *alphaA) + backdropColor.r * alphaB));
+-                    color.g = min(1.0, ((sampleBg(bgNum).g *alphaA) + backdropColor.g * alphaB));
+-                    color.b = min(1.0, ((sampleBg(bgNum).b *alphaA) + backdropColor.b * alphaB));
++                    color.r = min(1.0, ((bgS[bgNum].r *alphaA) + backdropColor.r * alphaB));
++                    color.g = min(1.0, ((bgS[bgNum].g *alphaA) + backdropColor.g * alphaB));
++                    color.b = min(1.0, ((bgS[bgNum].b *alphaA) + backdropColor.b * alphaB));
+                     color.a = 1.0;
+                 } else {
+-                    color = sampleBg(bgNum);
++                    color = bgS[bgNum];
+                     currentBgDrawn = bgNum;
+                 }
+                 // The blended background becomes the top layer even when its
+@@ -351,24 +355,24 @@ void main()
+             } else if(effectsEnabled && (((bldcnt >> 6) & 0x3) == 2) && ((bldcnt >> bgNum & 1) == 1)) {
+                 // Brightness Increase Mode. bgNum is Target 1.
+                 float brightFactor = min(16.0, float(bldy & 31)) / 16.0;
+-                //color.r = min(1.0, ( sampleBg(bgNum).r + ((1.0 - sampleBg(bgNum).r)*brightFactor)) );
+-                //color.g = min(1.0, ( sampleBg(bgNum).g + ((1.0 - sampleBg(bgNum).g)*brightFactor)) );
+-                //color.b = min(1.0, ( sampleBg(bgNum).b + ((1.0 - sampleBg(bgNum).b)*brightFactor)) );
+-                color.r = sampleBg(bgNum).r + (1.0 - sampleBg(bgNum).r)*brightFactor;
+-                color.g = sampleBg(bgNum).g + (1.0 - sampleBg(bgNum).g)*brightFactor;
+-                color.b = sampleBg(bgNum).b + (1.0 - sampleBg(bgNum).b)*brightFactor;
++                //color.r = min(1.0, ( bgS[bgNum].r + ((1.0 - bgS[bgNum].r)*brightFactor)) );
++                //color.g = min(1.0, ( bgS[bgNum].g + ((1.0 - bgS[bgNum].g)*brightFactor)) );
++                //color.b = min(1.0, ( bgS[bgNum].b + ((1.0 - bgS[bgNum].b)*brightFactor)) );
++                color.r = bgS[bgNum].r + (1.0 - bgS[bgNum].r)*brightFactor;
++                color.g = bgS[bgNum].g + (1.0 - bgS[bgNum].g)*brightFactor;
++                color.b = bgS[bgNum].b + (1.0 - bgS[bgNum].b)*brightFactor;
+                 color.a = 1.0;
+                 currentBgDrawn = bgNum;
+             } else if(effectsEnabled && (((bldcnt >> 6) & 0x3) == 3) && ((bldcnt >> bgNum & 1) == 1)) {
+                 // Brightness Decrease Mode. bgNum is Target 1.
+                 float brightFactor = min(16.0, float(bldy & 31)) / 16.0;
+-                color.r = max(0.0, ( sampleBg(bgNum).r - ((sampleBg(bgNum).r)*brightFactor)) );
+-                color.g = max(0.0, ( sampleBg(bgNum).g - ((sampleBg(bgNum).g)*brightFactor)) );
+-                color.b = max(0.0, ( sampleBg(bgNum).b - ((sampleBg(bgNum).b)*brightFactor)) );
++                color.r = max(0.0, ( bgS[bgNum].r - ((bgS[bgNum].r)*brightFactor)) );
++                color.g = max(0.0, ( bgS[bgNum].g - ((bgS[bgNum].g)*brightFactor)) );
++                color.b = max(0.0, ( bgS[bgNum].b - ((bgS[bgNum].b)*brightFactor)) );
+                 color.a = 1.0;
+                 currentBgDrawn = bgNum;
+             } else {
+-                color.rgb = sampleBg(bgNum).rgb;
++                color.rgb = bgS[bgNum].rgb;
+                 color.a = 1.0;
+                 currentBgDrawn = bgNum;
+             }
+@@ -376,8 +380,8 @@ void main()
+     }
+     //Draw the remaining objs
+     for(int i=3-oamsDrawn; i>=0; i--) {
+-        if(sampleObj(i).a > 0.1) {
+-            color = sampleObj(i);
++        if(objS[i].a > 0.1) {
++            color = objS[i];
+             currentBgDrawn = 4;
+         }
+     }
+diff --git a/libraries/sim/src/sim_audio.cpp b/libraries/sim/src/sim_audio.cpp
+index efe0ec8..b74cb6f 100644
+--- a/libraries/sim/src/sim_audio.cpp
++++ b/libraries/sim/src/sim_audio.cpp
+@@ -225,6 +225,9 @@ void SIM_Audio_Init(int aAudioFrequency)
+     if(s_requestedAudioSpec.samples & 1) {
+         s_requestedAudioSpec.samples += 1;
+     }
++#if defined(SDK_BUILD_NX)
++    s_requestedAudioSpec.samples *= 4;  // NX: larger SDL buffer avoids crackling (mixer is buffer-size independent)
++#endif
+     s_requestedAudioSpec.callback = SIM_Audio_Callback;
+     if(SDL_OpenAudio(&s_requestedAudioSpec, NULL) < 0) {
+         printf("SDL Error %s\n", SDL_GetError());
+diff --git a/libraries/sim/src/sim_crash.cpp b/libraries/sim/src/sim_crash.cpp
+index 403bbee..807b5d7 100644
+--- a/libraries/sim/src/sim_crash.cpp
++++ b/libraries/sim/src/sim_crash.cpp
+@@ -4,6 +4,9 @@
+ // stdio may be the thing that broke, so everything they write goes through SIM_Crash_Printf: a small formatter
+ // that writes straight to the file descriptors with no allocation or locks.
+ 
++#if defined(__SWITCH__) && !defined(_GNU_SOURCE)
++#define _GNU_SOURCE 1  // NX: newlib hides fileno/fdopen otherwise
++#endif
+ #include "simulator/sim_crash.h"
+ 
+ #include <atomic>
+@@ -169,8 +172,12 @@ void StartTee(Tee &tee, FILE *stream, int &termFd) {
+     int fds[2];
+ #if defined(SIM_CRASH_WINDOWS)
+     if (_pipe(fds, 1 << 16, _O_BINARY) != 0) return;
++#else
++#if defined(__SWITCH__)
++    return;  // NX: no pipe(); no stdout tee
+ #else
+     if (pipe(fds) != 0) return;
++#endif
+     fcntl(fds[0], F_SETFD, FD_CLOEXEC);
+ #endif
+     sim_dup2(fds[1], sim_fileno(stream));
+diff --git a/libraries/sim/src/sim_frame_profile.cpp b/libraries/sim/src/sim_frame_profile.cpp
+index 5e357ca..8eb6c36 100644
+--- a/libraries/sim/src/sim_frame_profile.cpp
++++ b/libraries/sim/src/sim_frame_profile.cpp
+@@ -43,4 +43,7 @@ extern "C" void SIM_ProfileFrame(u64 work, u64 wait, u64 swap, u64 full, int vsy
+         std::fprintf(sTrace, ",%llu", (unsigned long long)value);
+     }
+     std::fputc('\n', sTrace);
++#ifdef SDK_BUILD_NX
++    if (sFrame % 120 == 0) std::fflush(sTrace);  // NX: no atexit on HOME-exit
++#endif
+ }
+diff --git a/libraries/sim/src/sim_g2.cpp b/libraries/sim/src/sim_g2.cpp
+index a7d5622..1e2f083 100644
+--- a/libraries/sim/src/sim_g2.cpp
++++ b/libraries/sim/src/sim_g2.cpp
+@@ -1,4 +1,13 @@
+ #include <nitro.h>
++#ifdef SDK_BUILD_NX  // NX: 2D uploads via a persistent PBO ring (sim_main.cpp)
++extern "C" void NX_TexSubImage2D(unsigned, int, int, int, int, int, unsigned, unsigned, const void *);
++extern "C" void NX_TexSubImage3D(unsigned, int, int, int, int, int, int, int, unsigned, unsigned, const void *);
++#define NX_TSI2D NX_TexSubImage2D
++#define NX_TSI3D NX_TexSubImage3D
++#else
++#define NX_TSI2D glTexSubImage2D
++#define NX_TSI3D glTexSubImage3D
++#endif
+ #include <simulator/sim.h>
+ #include "sim_g2.h"
+ #include "sim_window.h"
+@@ -339,7 +348,7 @@ void G2SIM_DrawBG(u8 bgNum, u8 bgMode, u8 bg03D, u8 isSub) {
+   glActiveTexture(GL_TEXTURE0 + s_bgTexUnits[bgNum]);
+   glBindTexture(GL_TEXTURE_2D, s_bgTextureId[bgNum]);
+ 
+-  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SIM_NDS_SCREEN_WIDTH,
++  NX_TSI2D(GL_TEXTURE_2D, 0, 0, 0, SIM_NDS_SCREEN_WIDTH,
+                   SIM_NDS_SCREEN_HEIGHT * 2, GL_RGBA, GL_UNSIGNED_BYTE,
+                   (void *)bgTexBuf);
+ #ifdef SDK_TRACY_ENABLE
+@@ -598,9 +607,9 @@ void G2SIM_DrawTrainerBannerWide(void) {
+     DrawBGLine_Text(line, 3, 0, FALSE, otherHalf, 256);
+   }
+   // The caller has bound a 512-wide texture on BG3's texture unit.
+-  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, SIM_NDS_SCREEN_HEIGHT * 2,
++  NX_TSI2D(GL_TEXTURE_2D, 0, 0, 0, 256, SIM_NDS_SCREEN_HEIGHT * 2,
+                   GL_RGBA, GL_UNSIGNED_BYTE, bg3tex);
+-  glTexSubImage2D(GL_TEXTURE_2D, 0, 256, 0, 256, SIM_NDS_SCREEN_HEIGHT * 2,
++  NX_TSI2D(GL_TEXTURE_2D, 0, 256, 0, 256, SIM_NDS_SCREEN_HEIGHT * 2,
+                   GL_RGBA, GL_UNSIGNED_BYTE, otherHalf);
+ }
+ 
+diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
+index adce596..e446815 100644
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -1,9 +1,19 @@
+ extern "C" void NitroMain();
++extern "C" void NX_BootTrace(const char *what);
+ extern "C" int NitroSpMain(void *arg);
+ #define SDL_MAIN_HANDLED
+ #define _POSIX_C_SOURCE 199309L
+ 
+ #include <string>
++#ifdef SDK_BUILD_NX  // NX: 2D uploads via a persistent PBO ring (sim_main.cpp)
++extern "C" void NX_TexSubImage2D(unsigned, int, int, int, int, int, unsigned, unsigned, const void *);
++extern "C" void NX_TexSubImage3D(unsigned, int, int, int, int, int, int, int, unsigned, unsigned, const void *);
++#define NX_TSI2D NX_TexSubImage2D
++#define NX_TSI3D NX_TexSubImage3D
++#else
++#define NX_TSI2D glTexSubImage2D
++#define NX_TSI3D glTexSubImage3D
++#endif
+ #include <mutex>
+ #include <atomic>
+ #include <vector>
+@@ -191,7 +201,7 @@ static struct timespec s_SIM_lastFrameEnd;
+ static u64 sRenderFrameTime;
+ static u64 sFullFrameTime;
+ static bool sFastForwardActive = false;
+-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
++#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
+ static unsigned char sExtendedTextures[4 * 1024 * 1024];
+ struct VirtualTexture { u32 address; u32 flags; };
+ static VirtualTexture sVirtualTextures[65536];
+@@ -708,6 +718,51 @@ static void ApplyPending3DAntialiasing(bool resolutionChanged) {
+   sAntialiasApplied = sAntialiasRequested;
+ }
+ 
++
++// ---- NX_SHADER_CACHE ----
++#ifdef SDK_BUILD_NX
++static u64 NxHash(const char *a, const char *b) {
++  u64 h = 1469598103934665603ull;
++  for (const char *s : {a, b, (const char *)glGetString(GL_RENDERER), (const char *)glGetString(GL_VERSION)})
++    for (; s && *s; s++) h = (h ^ (u8)*s) * 1099511628211ull;
++  return h;
++}
++static bool NxLoadProgram(GLuint prog, const char *name, u64 hash) {
++  GLint formats = 0;
++  glGetIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &formats);
++  char b[160]; snprintf(b, sizeof b, "shader cache %s: %d binary formats", name, formats); NX_BootTrace(b);
++  if (formats <= 0) return false;
++  char path[128]; snprintf(path, sizeof path, "sdmc:/switch/pokeplatinum_ss/shader_%s.bin", name);
++  FILE *f = fopen(path, "rb");
++  if (!f) { NX_BootTrace("shader cache: no file"); return false; }
++  u64 fileHash = 0; u32 format = 0, len = 0; bool ok = false;
++  if (fread(&fileHash, 8, 1, f) == 1 && fread(&format, 4, 1, f) == 1 && fread(&len, 4, 1, f) == 1 && fileHash == hash && len > 0 && len < (64u << 20)) {
++    std::vector<u8> data(len);
++    if (fread(data.data(), 1, len, f) == len) {
++      glProgramBinary(prog, format, data.data(), len);
++      GLint st = 0; glGetProgramiv(prog, GL_LINK_STATUS, &st);
++      ok = st == GL_TRUE;
++    }
++  }
++  fclose(f);
++  NX_BootTrace(ok ? "shader cache: loaded" : "shader cache: stale or rejected");
++  return ok;
++}
++static void NxSaveProgram(GLuint prog, const char *name, u64 hash) {
++  GLint len = 0; glGetProgramiv(prog, GL_PROGRAM_BINARY_LENGTH, &len);
++  if (len <= 0) { NX_BootTrace("shader cache: driver gave no binary"); return; }
++  std::vector<u8> data(len); GLenum format = 0; GLsizei got = 0;
++  glGetProgramBinary(prog, len, &got, &format, data.data());
++  char path[128]; snprintf(path, sizeof path, "sdmc:/switch/pokeplatinum_ss/shader_%s.bin", name);
++  if (FILE *f = fopen(path, "wb")) {
++    u32 fmt = format, n = (u32)got;
++    fwrite(&hash, 8, 1, f); fwrite(&fmt, 4, 1, f); fwrite(&n, 4, 1, f); fwrite(data.data(), 1, n, f); fclose(f);
++  }
++  char b[96]; snprintf(b, sizeof b, "shader cache: saved %d bytes", (int)got); NX_BootTrace(b);
++}
++#endif
++// ---- end NX_SHADER_CACHE ----
++
+ void *SIM_RenderInit(void *arg) {
+ 
+ #ifdef SDL_HINT_WINDOWS_DPI_AWARENESS
+@@ -715,6 +770,7 @@ void *SIM_RenderInit(void *arg) {
+ #endif
+   SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER |
+            SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER);
++  NX_BootTrace("init: SDL_Init done");
+   SIM_Audio_Init(44100);
+ 
+   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+@@ -766,6 +822,10 @@ void *SIM_RenderInit(void *arg) {
+     windowWidth = s_SIM_config.windowWidth;
+   }
+ 
++#ifdef SDK_BUILD_NX
++  windowWidth = 1280;  // NX: SDL's window is the 720p framebuffer
++  windowHeight = 720;
++#endif
+   std::string windowTitle = "libntr Application";
+ 
+   CARDRomHeader *cardHeader = (CARDRomHeader *)(HW_ROM_HEADER_BUF);
+@@ -786,12 +846,14 @@ void *SIM_RenderInit(void *arg) {
+   window = SDL_CreateWindow(
+       windowTitle.c_str(), 100, 100, windowWidth, windowHeight,
+       SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
++  NX_BootTrace("init: window created");
+   context = SDL_GL_CreateContext(window);
+ 
+   if(s_SIM_config.fullScreen) {
+     SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+   }
+ 
++  NX_BootTrace("init: GL context created");
+   gladLoadGLLoader(SDL_GL_GetProcAddress);
+ 
+   glViewport(0, 0, windowWidth, windowHeight);
+@@ -799,8 +861,12 @@ void *SIM_RenderInit(void *arg) {
+   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+   glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+ 
++#ifndef SDK_BUILD_NX  // NX: empty callback; skip the driver debug path
+   glEnable(GL_DEBUG_OUTPUT);
++#endif
++#ifndef SDK_BUILD_NX
+   glDebugMessageCallback(MessageCallback, 0);
++#endif
+ 
+   GLint status;
+   GLint logSize = 0;
+@@ -1065,6 +1131,7 @@ void *SIM_RenderInit(void *arg) {
+   glActiveTexture(GL_TEXTURE0);
+ 
+   // Setup G3 Shader Program
++  NX_BootTrace("init: textures/FBOs done, compiling G3");
+   g3shaderProgramID = glCreateProgram();
+   CompileVertexShader(myVertexShader, SIM::G3VertexShader);
+   CompileFragmentShader(myFragmentShader, SIM::G3FragmentShader);
+@@ -1072,12 +1139,33 @@ void *SIM_RenderInit(void *arg) {
+   ResetFieldGrade();
+   glProgramUniform1f(g3shaderProgramID, glGetUniformLocation(g3shaderProgramID, "fieldEmissionWeight"), 1);
+ 
++  NX_BootTrace("init: G3 linked");
+   // Setup G2 Shader Program
+   g2shaderProgramID = glCreateProgram();
++#ifdef SDK_BUILD_NX
++  const u64 nxG2Hash = NxHash(SIM::G2VertexShader, SIM::G2FragmentShader);
++  if (NxLoadProgram(g2shaderProgramID, "g2", nxG2Hash)) {
++    glValidateProgram(g2shaderProgramID);
++    glUseProgram(g2shaderProgramID);
++  } else {
++  glProgramParameteri(g2shaderProgramID, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE);
++#endif
+   CompileVertexShader(g2VertexShader, SIM::G2VertexShader);
++  NX_BootTrace("init: G2 vertex compiled");
+   CompileFragmentShader(g2FragmentShader, SIM::G2FragmentShader);
++  NX_BootTrace("init: G2 fragment compiled");
+   LinkShader(g2shaderProgramID, g2VertexShader, g2FragmentShader);
++#ifdef SDK_BUILD_NX
++  NX_BootTrace("init: G2 link done");
++  { GLint st = 0; glGetProgramiv(g2shaderProgramID, GL_LINK_STATUS, &st);  // NX: G2 link status
++    char lg[400] = {0}; if (!st) glGetProgramInfoLog(g2shaderProgramID, sizeof lg, NULL, lg);
++    GLint fs = 0; glGetShaderiv(g2FragmentShader, GL_COMPILE_STATUS, &fs);
++    char b[480]; snprintf(b, sizeof b, "G2 compile %d link %d %s", fs, st, lg); NX_BootTrace(b); }
++  NxSaveProgram(g2shaderProgramID, "g2", nxG2Hash);
++  }
++#endif
+ 
++  NX_BootTrace("init: G2 linked, field coverage");
+   sFieldCoverage.Init(SIM::BloomVertexShader, SIM::FieldCoverageFragmentShader, s_MaxViewWidth, SIM_NDS_SCREEN_HEIGHT * 2);
+   sBloom.Init(SIM::BloomVertexShader, SIM::BloomFragmentShader);
+   sBloom.Resize(s_MaxViewWidth, SIM_NDS_SCREEN_HEIGHT * 2, s_SIM_config.internalResolutionScale);
+@@ -1102,8 +1190,10 @@ void *SIM_RenderInit(void *arg) {
+ 
+   SDL_GL_SwapWindow(window);
+ 
++  NX_BootTrace("init: bloom done, first swap done");
+   // Setup ImGui
+   SIM::GUI::Init(window, context);
++  NX_BootTrace("init: ImGui done");
+ 
+   clock_gettime(CLOCK_MONOTONIC, &s_SIM_lastFrameEnd);
+ 
+@@ -1352,7 +1442,7 @@ static void DrawEngine(BOOL isSub) {
+           }
+         }
+       }
+-      glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, priority,
++      NX_TSI3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, priority,
+                      SIM_FIELD_SPRITE_WIDTH, SIM_NDS_SCREEN_HEIGHT * 2, 1,
+                      GL_RGBA, GL_UNSIGNED_BYTE, s_FieldParticlesPixels);
+     }
+@@ -1401,7 +1491,7 @@ static void DrawEngine(BOOL isSub) {
+           }
+         }
+       }
+-      glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, priority,
++      NX_TSI3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, priority,
+                      SIM_FIELD_SPRITE_WIDTH, SIM_NDS_SCREEN_HEIGHT * 2, 1,
+                      GL_RGBA, GL_UNSIGNED_BYTE, s_FieldParticlesPixels);
+     }
+@@ -1464,9 +1554,9 @@ static void DrawEngine(BOOL isSub) {
+         u8 *const native[] = {bg0tex, bg1tex, bg2tex, bg3tex};
+         glActiveTexture(GL_TEXTURE0 + s_bgTexUnits[curBgNum]);
+         glBindTexture(GL_TEXTURE_2D, s_WideBgTexture[curBgNum]);
+-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, SIM_NDS_SCREEN_HEIGHT * 2,
++        NX_TSI2D(GL_TEXTURE_2D, 0, 0, 0, 256, SIM_NDS_SCREEN_HEIGHT * 2,
+                         GL_RGBA, GL_UNSIGNED_BYTE, native[curBgNum]);
+-        glTexSubImage2D(GL_TEXTURE_2D, 0, 256, 0, 256, SIM_NDS_SCREEN_HEIGHT * 2,
++        NX_TSI2D(GL_TEXTURE_2D, 0, 256, 0, 256, SIM_NDS_SCREEN_HEIGHT * 2,
+                         GL_RGBA, GL_UNSIGNED_BYTE, s_WideBgHalf);
+         wideBgMask |= 1 << curBgNum;
+       }
+@@ -1509,7 +1599,7 @@ static void DrawEngine(BOOL isSub) {
+       oamPixelBuf = NULL;
+       break;
+     }
+-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SIM_NDS_SCREEN_WIDTH,
++    NX_TSI2D(GL_TEXTURE_2D, 0, 0, 0, SIM_NDS_SCREEN_WIDTH,
+                     SIM_NDS_SCREEN_HEIGHT * 2, GL_RGBA, GL_UNSIGNED_BYTE,
+                     (void *)oamPixelBuf);
+   }
+@@ -1544,7 +1634,7 @@ static void DrawEngine(BOOL isSub) {
+   glActiveTexture(GL_TEXTURE0 + s_objWindowTexUnit);
+   glBindTexture(GL_TEXTURE_2D, objWindowTextureId);
+   u8 *objWindowBuf = isSub ? objWindowsTex : objWindowTex;
+-  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SIM_NDS_SCREEN_WIDTH,
++  NX_TSI2D(GL_TEXTURE_2D, 0, 0, 0, SIM_NDS_SCREEN_WIDTH,
+                   SIM_NDS_SCREEN_HEIGHT * 2, GL_RGBA, GL_UNSIGNED_BYTE,
+                   (void *)objWindowBuf);
+   glProgramUniform1i(
+@@ -1554,13 +1644,13 @@ static void DrawEngine(BOOL isSub) {
+ 
+   glActiveTexture(GL_TEXTURE0 + s_WindowMaskTexUnit);
+   glBindTexture(GL_TEXTURE_2D, s_WindowMaskTexture);
+-  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SIM_FIELD_SPRITE_WIDTH,
++  NX_TSI2D(GL_TEXTURE_2D, 0, 0, 0, SIM_FIELD_SPRITE_WIDTH,
+                  SIM_NDS_SCREEN_HEIGHT * 2, GL_RG_INTEGER, GL_UNSIGNED_BYTE,
+                  G2SIM_GetWindowMasks(isSub));
+   glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "windowMaskTexture"), s_WindowMaskTexUnit);
+   glActiveTexture(GL_TEXTURE0 + s_ScanlineBlendTexUnit);
+   glBindTexture(GL_TEXTURE_2D, s_ScanlineBlendTexture);
+-  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1, SIM_NDS_SCREEN_HEIGHT * 2,
++  NX_TSI2D(GL_TEXTURE_2D, 0, 0, 0, 1, SIM_NDS_SCREEN_HEIGHT * 2,
+                  GL_RGBA_INTEGER, GL_UNSIGNED_SHORT, G2SIM_GetScanlineBlend(isSub));
+   glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "scanlineBlendTexture"), s_ScanlineBlendTexUnit);
+ 
+@@ -1912,7 +2002,548 @@ void SIM_SetHeldMainScreenFirstLine(u32 firstLine) {
+ extern "C" void SIM_Autopilot_Frame(void);
+ extern "C" void SIM_Autopilot_BeforeSwap(int width, int height);
+ 
++
++// ---- NX_PBO ----
++#ifdef SDK_BUILD_NX
++static const size_t kNxSeg = 16u << 20;
++static const int kNxSegs = 3;
++static GLuint sNxPbo;
++static u8 *sNxPboMap;
++static bool sNxPboOn, sNxPboInit;
++static size_t sNxPboHead;
++static int sNxPboSeg;
++static GLsync sNxPboFence[kNxSegs];
++static u64 sNxPboBytes, sNxPboUploads, sNxPboFallback, sNxPboWaitTicks;
++typedef void (*NxBufferStorageFn)(GLenum, GLsizeiptr, const void *, GLbitfield);  // ARB_buffer_storage (not in this glad)
++#ifndef GL_MAP_PERSISTENT_BIT
++#define GL_MAP_PERSISTENT_BIT 0x0040
++#endif
++#ifndef GL_MAP_COHERENT_BIT
++#define GL_MAP_COHERENT_BIT 0x0080
++#endif
++static void NxPboInit() {
++  sNxPboInit = true;
++  const char *e = getenv("NX_PBO");
++  if (e && *e == '0') { NX_BootTrace("pbo: off (NX_PBO=0)"); return; }
++  NxBufferStorageFn bufferStorage = (NxBufferStorageFn)SDL_GL_GetProcAddress("glBufferStorage");
++  if (!bufferStorage || !glad_glMapBufferRange || !glad_glFenceSync) { NX_BootTrace("pbo: no ARB_buffer_storage"); return; }
++  const GLbitfield flags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
++  glGenBuffers(1, &sNxPbo);
++  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, sNxPbo);
++  bufferStorage(GL_PIXEL_UNPACK_BUFFER, kNxSeg * kNxSegs, NULL, flags);
++  sNxPboMap = (u8 *)glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, kNxSeg * kNxSegs, flags);
++  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
++  sNxPboOn = sNxPboMap != NULL;
++  char b[96]; snprintf(b, sizeof b, "pbo: %s (gl error 0x%x)", sNxPboOn ? "on" : "map failed", glGetError()); NX_BootTrace(b);
++}
++static size_t NxBpp(GLenum fmt, GLenum type) {
++  const int comps = (fmt == GL_RGBA || fmt == GL_RGBA_INTEGER) ? 4 : (fmt == GL_RG || fmt == GL_RG_INTEGER) ? 2
++                  : (fmt == GL_RED || fmt == GL_RED_INTEGER) ? 1 : 0;
++  const int size = type == GL_UNSIGNED_BYTE ? 1 : type == GL_UNSIGNED_SHORT ? 2 : type == GL_FLOAT ? 4 : 0;
++  return (size_t)comps * size;
++}
++// Returns the PBO offset for `bytes` of staging in this frame's segment, or SIZE_MAX when it does not fit.
++static size_t NxPboStage(const void *px, size_t rowBytes, size_t rows) {
++  if (!sNxPboInit) NxPboInit();
++  const size_t bytes = rowBytes * rows;
++  if (!sNxPboOn || !px || !rowBytes || (rowBytes & 3)) return SIZE_MAX;
++  const size_t start = (sNxPboHead + 255) & ~(size_t)255;
++  if (start + bytes > kNxSeg) return SIZE_MAX;
++  sNxPboHead = start + bytes;
++  const size_t off = (size_t)sNxPboSeg * kNxSeg + start;
++  memcpy(sNxPboMap + off, px, bytes);
++  sNxPboBytes += bytes; sNxPboUploads++;
++  return off;
++}
++// GPU copy: ring range -> buffer texture -> draw into the bound layer texture.
++static const char *kNxCopyVS =
++    "#version 330 core\n"
++    "void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));\n"
++    "  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0); }\n";
++static const char *kNxCopyFS[2] = {
++    "#version 330 core\nuniform samplerBuffer src; uniform ivec4 rect; out vec4 o;\n"
++    "void main() { ivec2 p = ivec2(gl_FragCoord.xy) - rect.xy; o = texelFetch(src, p.y * rect.z + p.x); }\n",
++    "#version 330 core\nuniform usamplerBuffer src; uniform ivec4 rect; out uvec4 o;\n"
++    "void main() { ivec2 p = ivec2(gl_FragCoord.xy) - rect.xy; o = texelFetch(src, p.y * rect.z + p.x); }\n"};
++static const int kNxCopyUnit = 31;
++static GLuint sNxCopyProg[2], sNxCopyVao, sNxCopyFbo, sNxBufTex;
++static GLint sNxCopyRect[2];
++static bool sNxCopyReady, sNxCopyTried;
++static GLuint sNxGoodTex[64], sNxBadTex[64];
++static int sNxGoodN, sNxBadN;
++static u64 sNxCopies;
++static GLuint NxShader(GLenum type, const char *src) {
++  GLuint s = glCreateShader(type);
++  glShaderSource(s, 1, &src, NULL);
++  glCompileShader(s);
++  GLint ok = 0; glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
++  if (!ok) { char log[512] = {0}; glGetShaderInfoLog(s, sizeof log, NULL, log); NX_BootTrace("copy shader compile failed:"); NX_BootTrace(log); }
++  return s;
++}
++static void NxCopyInit() {
++  sNxCopyTried = true;
++  const char *mode = getenv("NX_UPLOAD");
++  if (mode && !strcmp(mode, "driver")) { NX_BootTrace("upload: driver path (NX_UPLOAD=driver)"); return; }
++  if (!sNxPboInit) NxPboInit();
++  if (!sNxPboOn) return;
++  GLint units = 0, align = 0;
++  glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &units);
++  glGetIntegerv(GL_TEXTURE_BUFFER_OFFSET_ALIGNMENT, &align);
++  if (units <= kNxCopyUnit || align <= 0 || align > 256) {
++    char b[96]; snprintf(b, sizeof b, "upload: gpu copy unavailable (units %d align %d)", units, align); NX_BootTrace(b); return;
++  }
++  GLint prevProg = 0; glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
++  GLuint vs = NxShader(GL_VERTEX_SHADER, kNxCopyVS);
++  for (int i = 0; i < 2; i++) {
++    GLuint fs = NxShader(GL_FRAGMENT_SHADER, kNxCopyFS[i]);
++    sNxCopyProg[i] = glCreateProgram();
++    glAttachShader(sNxCopyProg[i], vs); glAttachShader(sNxCopyProg[i], fs);
++    glLinkProgram(sNxCopyProg[i]);
++    GLint ok = 0; glGetProgramiv(sNxCopyProg[i], GL_LINK_STATUS, &ok);
++    if (!ok) { NX_BootTrace("upload: copy program link failed"); glUseProgram(prevProg); return; }
++    glUseProgram(sNxCopyProg[i]);
++    glUniform1i(glGetUniformLocation(sNxCopyProg[i], "src"), kNxCopyUnit);
++    sNxCopyRect[i] = glGetUniformLocation(sNxCopyProg[i], "rect");
++  }
++  glUseProgram(prevProg);
++  glGenVertexArrays(1, &sNxCopyVao);
++  glGenFramebuffers(1, &sNxCopyFbo);
++  glGenTextures(1, &sNxBufTex);
++  sNxCopyReady = true;
++  char b[96]; snprintf(b, sizeof b, "upload: gpu copy on (units %d align %d)", units, align); NX_BootTrace(b);
++}
++// Buffer-texture format for a TexSubImage format/type, plus which copy program (0 float, 1 uint).
++static GLenum NxBufFormat(GLenum fmt, GLenum type, int *prog) {
++  if (fmt == GL_RGBA && type == GL_UNSIGNED_BYTE) { *prog = 0; return GL_RGBA8; }
++  if (fmt == GL_RG_INTEGER && type == GL_UNSIGNED_BYTE) { *prog = 1; return GL_RG8UI; }
++  if (fmt == GL_RGBA_INTEGER && type == GL_UNSIGNED_SHORT) { *prog = 1; return GL_RGBA16UI; }
++  return 0;
++}
++static bool NxGpuCopy(GLenum target, int x, int y, int layer, int w, int h, unsigned fmt, unsigned type, const void *px) {
++  if (!sNxCopyTried) NxCopyInit();
++  if (!sNxCopyReady || !px) return false;
++  int prog = 0;
++  const GLenum bufFmt = NxBufFormat(fmt, type, &prog);
++  if (!bufFmt) return false;
++  GLint tex = 0;
++  glGetIntegerv(target == GL_TEXTURE_2D ? GL_TEXTURE_BINDING_2D : GL_TEXTURE_BINDING_2D_ARRAY, &tex);
++  if (!tex) return false;
++  for (int i = 0; i < sNxBadN; i++) if (sNxBadTex[i] == (GLuint)tex) return false;
++  const size_t bpp = NxBpp(fmt, type), bytes = (size_t)w * h * bpp;
++  const size_t off = NxPboStage(px, (size_t)w * bpp, (size_t)h);
++  if (off == SIZE_MAX) return false;
++
++  GLint prevFbo, prevProg, prevVao, prevActive, prevBufTex, vp[4];
++  GLboolean mask[4];
++  glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevFbo);
++  glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
++  glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prevVao);
++  glGetIntegerv(GL_ACTIVE_TEXTURE, &prevActive);
++  glGetIntegerv(GL_VIEWPORT, vp);
++  glGetBooleanv(GL_COLOR_WRITEMASK, mask);
++  const GLenum caps[] = {GL_BLEND, GL_SCISSOR_TEST, GL_DEPTH_TEST, GL_STENCIL_TEST, GL_CULL_FACE, GL_DITHER, GL_RASTERIZER_DISCARD};
++  GLboolean on[7];
++  for (int i = 0; i < 7; i++) { on[i] = glIsEnabled(caps[i]); if (on[i]) glDisable(caps[i]); }
++
++  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, sNxCopyFbo);
++  if (target == GL_TEXTURE_2D) glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
++  else glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, tex, 0, layer);
++  bool good = false;
++  for (int i = 0; i < sNxGoodN; i++) if (sNxGoodTex[i] == (GLuint)tex) { good = true; break; }
++  if (!good) {
++    const GLenum drawBuf = GL_COLOR_ATTACHMENT0;
++    glDrawBuffers(1, &drawBuf);
++    good = glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
++    if (good && sNxGoodN < 64) sNxGoodTex[sNxGoodN++] = tex;
++    if (!good && sNxBadN < 64) sNxBadTex[sNxBadN++] = tex;
++    char b[96]; snprintf(b, sizeof b, "upload: texture %d fbo %s", tex, good ? "ok" : "INCOMPLETE -> driver path"); NX_BootTrace(b);
++  }
++  if (good) {
++    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
++    glViewport(x, y, w, h);
++    glActiveTexture(GL_TEXTURE0 + kNxCopyUnit);
++    glGetIntegerv(GL_TEXTURE_BINDING_BUFFER, &prevBufTex);
++    glBindTexture(GL_TEXTURE_BUFFER, sNxBufTex);
++    glTexBufferRange(GL_TEXTURE_BUFFER, bufFmt, sNxPbo, (GLintptr)off, (GLsizeiptr)bytes);
++    glUseProgram(sNxCopyProg[prog]);
++    glUniform4i(sNxCopyRect[prog], x, y, w, h);
++    glBindVertexArray(sNxCopyVao);
++    glDrawArrays(GL_TRIANGLES, 0, 3);
++    glBindTexture(GL_TEXTURE_BUFFER, prevBufTex);
++    sNxCopies++;
++  }
++  // restore
++  glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
++  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevFbo);
++  glUseProgram(prevProg);
++  glBindVertexArray(prevVao);
++  glActiveTexture(prevActive);
++  glViewport(vp[0], vp[1], vp[2], vp[3]);
++  glColorMask(mask[0], mask[1], mask[2], mask[3]);
++  for (int i = 0; i < 7; i++) if (on[i]) glEnable(caps[i]);
++  return good;
++}
++extern "C" void NX_TexSubImage2D(unsigned target, int level, int x, int y, int w, int h, unsigned fmt, unsigned type, const void *px) {
++  if (level == 0 && target == GL_TEXTURE_2D && NxGpuCopy(target, x, y, 0, w, h, fmt, type, px)) return;
++  sNxPboFallback++;
++  glad_glTexSubImage2D(target, level, x, y, w, h, fmt, type, px);
++}
++extern "C" void NX_TexSubImage3D(unsigned target, int level, int x, int y, int z, int w, int h, int d, unsigned fmt, unsigned type, const void *px) {
++  if (level == 0 && target == GL_TEXTURE_2D_ARRAY && d == 1 && NxGpuCopy(target, x, y, z, w, h, fmt, type, px)) return;
++  sNxPboFallback++;
++  glad_glTexSubImage3D(target, level, x, y, z, w, h, d, fmt, type, px);
++}
++// Once per frame, before the swap: fence this frame's segment, move to the oldest one.
++static void NxPboFrameEnd() {
++  if (!sNxPboOn) return;
++  if (sNxPboFence[sNxPboSeg]) glDeleteSync(sNxPboFence[sNxPboSeg]);
++  sNxPboFence[sNxPboSeg] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
++  sNxPboSeg = (sNxPboSeg + 1) % kNxSegs;
++  sNxPboHead = 0;
++  if (GLsync s = sNxPboFence[sNxPboSeg]) {
++    const u64 t0 = armGetSystemTick();
++    glClientWaitSync(s, GL_SYNC_FLUSH_COMMANDS_BIT, 100000000ull);
++    sNxPboWaitTicks += armGetSystemTick() - t0;
++    glDeleteSync(s);
++    sNxPboFence[sNxPboSeg] = 0;
++  }
++}
++#endif
++// ---- end NX_PBO ----
++
++// ---- NX_DEFER_FENCE ----
++#ifdef SDK_BUILD_NX
++extern "C" Result __real_nwindowDequeueBuffer(NWindow *nw, s32 *out_slot, NvMultiFence *out_fence);
++static int sNxDefer = -1;  // -1 unknown, 0 off, 1 on
++static bool sNxFencePending;
++static NvMultiFence sNxFence;
++static u64 sNxDequeueTicks, sNxFenceWaitTicks, sNxDequeues;
++static u64 sNxSkipped;  // NX_SKIPDUP
++extern "C" Result __wrap_nwindowDequeueBuffer(NWindow *nw, s32 *out_slot, NvMultiFence *out_fence) {
++  if (sNxDefer < 0) { const char *e = getenv("NX_DEFER_FENCE"); sNxDefer = (e && *e == '0') ? 0 : 1; }
++  const u64 t0 = armGetSystemTick();
++  Result r;
++  if (out_fence || !sNxDefer) {
++    r = __real_nwindowDequeueBuffer(nw, out_slot, out_fence);
++  } else {
++    NvMultiFence f;
++    r = __real_nwindowDequeueBuffer(nw, out_slot, &f);
++    if (R_SUCCEEDED(r)) {
++      if (sNxFencePending) nvMultiFenceWait(&sNxFence, -1);  // never drop an older fence
++      sNxFence = f;
++      sNxFencePending = true;
++    }
++  }
++  sNxDequeueTicks += armGetSystemTick() - t0;
++  sNxDequeues++;
++  return r;
++}
++// Before the first GPU write to the window in this frame.
++static void NxWaitWindowFence() {
++  if (!sNxFencePending) return;
++  const u64 t0 = armGetSystemTick();
++  nvMultiFenceWait(&sNxFence, -1);
++  sNxFenceWaitTicks += armGetSystemTick() - t0;
++  sNxFencePending = false;
++}
++#endif
++// ---- end NX_DEFER_FENCE ----
++
++// ---- NX_GPU_STAMPS ----
++#ifdef SDK_BUILD_NX
++static const int kNxStamps = 6, kNxRing = 5;
++static GLuint sNxQ[kNxRing][kNxStamps];
++static bool sNxQUsed[kNxRing][kNxStamps];
++static int sNxQFrame;  // ring slot written this frame
++static bool sNxQInit;
++static double sNxGpuAcc[kNxStamps + 1];
++static u64 sNxGpuFrames;
++static void NxGpuStamp(int k) {
++  if (!sNxQInit) { glGenQueries(kNxRing * kNxStamps, &sNxQ[0][0]); sNxQInit = true; }
++  glQueryCounter(sNxQ[sNxQFrame][k], GL_TIMESTAMP);
++  sNxQUsed[sNxQFrame][k] = true;
++}
++// Called at frame start (after the swap): read back the oldest slot, then reuse it.
++static void NxGpuFrameStart() {
++  if (!sNxQInit) { NxGpuStamp(0); return; }
++  const int next = (sNxQFrame + 1) % kNxRing;
++  // slot `next` holds frame N-4; its S0..S5, plus S0 of the frame after it (slot next+1)
++  const int after = (next + 1) % kNxRing;
++  bool ok = sNxQUsed[next][0] && sNxQUsed[after][0];
++  for (int k = 1; k < kNxStamps && ok; k++) ok = sNxQUsed[next][k];
++  if (ok) {
++    GLint avail = 0;
++    glGetQueryObjectiv(sNxQ[after][0], GL_QUERY_RESULT_AVAILABLE, &avail);
++    if (avail) {
++      GLuint64 t[kNxStamps + 1];
++      for (int k = 0; k < kNxStamps; k++) glGetQueryObjectui64v(sNxQ[next][k], GL_QUERY_RESULT, &t[k]);
++      glGetQueryObjectui64v(sNxQ[after][0], GL_QUERY_RESULT, &t[kNxStamps]);
++      for (int k = 0; k < kNxStamps; k++) sNxGpuAcc[k] += (double)(t[k + 1] - t[k]) / 1e6;
++      sNxGpuAcc[kNxStamps] += (double)(t[kNxStamps] - t[0]) / 1e6;
++      sNxGpuFrames++;
++    }
++  }
++  for (int k = 0; k < kNxStamps; k++) sNxQUsed[next][k] = false;
++  sNxQFrame = next;
++  NxGpuStamp(0);
++}
++#endif
++// ---- end NX_GPU_STAMPS ----
++
++// ---- NX_SAMPLER ----
++#ifdef SDK_BUILD_NX
++extern "C" char __start__;
++static Handle sNxMainThread;
++extern volatile int sNxPhase;
++struct NxBin { u64 key; u32 count; };
++static NxBin sNxPc[1 << 15], sNxLr[1 << 15];
++static u64 sNxSamples, sNxFailed;
++static void NxBinAdd(NxBin *t, u64 key) {
++  u32 i = (u32)((key >> 2) * 2654435761u) & ((1 << 15) - 1);
++  for (int probe = 0; probe < 64; probe++, i = (i + 1) & ((1 << 15) - 1)) {
++    if (t[i].key == key) { t[i].count++; return; }
++    if (!t[i].key) { t[i].key = key; t[i].count = 1; return; }
++  }
++}
++struct NxStack { u64 key[10]; u32 count; };  // phase+1, pc, lr, 7 frame-chain return addresses
++static NxStack sNxStk[8192];
++static u64 sNxStkDropped, sNxStackLo, sNxStackHi;
++static void NxStackAdd(const u64 *key) {
++  u64 h = 1469598103934665603ull;
++  for (int i = 0; i < 10; i++) h = (h ^ key[i]) * 1099511628211ull;
++  u32 idx = (u32)(h >> 20) & 8191;
++  for (int probe = 0; probe < 32; probe++, idx = (idx + 1) & 8191) {
++    NxStack &e = sNxStk[idx];
++    if (!e.count) { memcpy(e.key, key, sizeof e.key); e.count = 1; return; }
++    if (!memcmp(e.key, key, sizeof e.key)) { e.count++; return; }
++  }
++  sNxStkDropped++;
++}
++static void NxProfThread(void *);
++static void NxProfDump() {
++  FILE *f = fopen("sdmc:/switch/pokeplatinum_ss/prof.txt", "w");
++  if (!f) return;
++  fprintf(f, "fnref %llx ", (unsigned long long)(uintptr_t)&NxProfThread);
++  fprintf(f, "base %llx samples %llu failed %llu\n", (unsigned long long)(uintptr_t)&__start__,
++          (unsigned long long)sNxSamples, (unsigned long long)sNxFailed);
++  for (auto &b : sNxPc) if (b.key) fprintf(f, "P %llx %u\n", (unsigned long long)b.key, b.count);
++  for (auto &b : sNxLr) if (b.key) fprintf(f, "L %llx %u\n", (unsigned long long)b.key, b.count);
++  fprintf(f, "dropped %llu\n", (unsigned long long)sNxStkDropped);
++  for (auto &e : sNxStk) if (e.count) {
++    fprintf(f, "S %u", e.count);
++    for (u64 k : e.key) fprintf(f, " %llx", (unsigned long long)k);
++    fputc('\n', f);
++  }
++  fclose(f);
++}
++static void NxProfThread(void *) {
++  const u64 base = (uintptr_t)&__start__;
++  for (;;) {
++    svcSleepThread(2000000);  // ~500 Hz
++    if (R_FAILED(svcSetThreadActivity(sNxMainThread, ThreadActivity_Paused))) { sNxFailed++; continue; }
++    ThreadContext ctx;
++    Result r = 1;
++    for (int tries = 0; tries < 8 && R_FAILED(r); tries++) { r = svcGetThreadContext3(&ctx, sNxMainThread); if (R_FAILED(r)) svcSleepThread(20000); }
++    u64 chain[7] = {0};
++    if (R_SUCCEEDED(r)) {
++      if (!sNxStackHi) {
++        MemoryInfo mi; u32 pi;
++        if (R_SUCCEEDED(svcQueryMemory(&mi, &pi, ctx.sp))) { sNxStackLo = mi.addr; sNxStackHi = mi.addr + mi.size; }
++      }
++      u64 fp = ctx.fp, floor = ctx.sp;
++      for (int d = 0; d < 7 && fp >= floor && fp >= sNxStackLo && fp + 16 <= sNxStackHi && !(fp & 7); d++) {
++        const u64 *frame = (const u64 *)fp;
++        chain[d] = frame[1] ? frame[1] - base + 1 : 0;
++        floor = fp + 16;
++        fp = frame[0];
++      }
++    }
++    svcSetThreadActivity(sNxMainThread, ThreadActivity_Runnable);
++    if (R_FAILED(r)) { sNxFailed++; continue; }
++    const int phase = sNxPhase;
++    if (phase < 0) continue;  // NX: ignore boot (shader compile)
++    NxBinAdd(sNxPc, (ctx.pc.x - base + 1) | ((u64)(phase + 1) << 52));  // +1: 0 marks an empty bin
++    NxBinAdd(sNxLr, (ctx.lr - base + 1) | ((u64)(phase + 1) << 52));
++    { u64 key[10] = {(u64)(phase + 1), ctx.pc.x - base + 1, ctx.lr - base + 1, chain[0], chain[1], chain[2], chain[3], chain[4], chain[5], chain[6]};
++      NxStackAdd(key); }
++    if (++sNxSamples % 5000 == 0) NxProfDump();
++  }
++}
++extern "C" Result __real_threadCreate(Thread *t, ThreadFunc entry, void *arg, void *stack_mem, size_t stack_sz, int prio, int cpuid);
++static int sNxThreadCore = -2;  // -2: libnx default (process main core); -3: alternate 1/2
++static int sNxThreadCount;
++extern "C" Result __wrap_threadCreate(Thread *t, ThreadFunc entry, void *arg, void *stack_mem, size_t stack_sz, int prio, int cpuid) {
++  int core = cpuid;
++  if (cpuid == -2 && sNxThreadCore != -2) core = sNxThreadCore == -3 ? 1 + (sNxThreadCount & 1) : sNxThreadCore;
++  Result r = __real_threadCreate(t, entry, arg, stack_mem, stack_sz, prio, core);
++  char b[160];
++  snprintf(b, sizeof b, "thread #%d entry +%llx prio 0x%x core %d->%d stack %zu r=%x", sNxThreadCount++,
++           (unsigned long long)((uintptr_t)entry - (uintptr_t)&__start__), prio, cpuid, core, stack_sz, r);
++  NX_BootTrace(b);
++  return r;
++}
++static void NxSamplerStart() {
++  sNxMainThread = threadGetCurHandle();
++  if (const char *c = getenv("NX_THREAD_CORE")) sNxThreadCore = !strcmp(c, "rr") ? -3 : atoi(c);
++  const char *p = getenv("NX_PROF");
++  if (!p || *p != '1') { NX_BootTrace("sampler off (NX_PROF=1 enables)"); return; }
++  static Thread th;
++  Result r = __real_threadCreate(&th, NxProfThread, NULL, NULL, 0x8000, 0x20, 2);
++  if (R_SUCCEEDED(r)) r = threadStart(&th);
++  char b[96]; snprintf(b, sizeof b, "sampler start r=%x fnref %llx", r, (unsigned long long)(uintptr_t)&NxProfThread); NX_BootTrace(b);
++}
++// CPU accounting for perf_log: main-thread ticks and core-0 idle ticks since last call
++static void NxCpuStats(double *mainPct, double *core0Pct) {
++  static u64 lastWall, lastMain, lastIdle;
++  u64 wall = armGetSystemTick(), mainT = 0, idle = 0;
++  svcGetInfo(&mainT, InfoType_ThreadTickCount, CUR_THREAD_HANDLE, (u64)-1);
++  svcGetInfo(&idle, InfoType_IdleTickCount, INVALID_HANDLE, (u64)-1);
++  const double dw = (double)(wall - lastWall);
++  *mainPct = lastWall ? 100.0 * (double)(mainT - lastMain) / dw : 0;
++  *core0Pct = lastWall ? 100.0 - 100.0 * (double)(idle - lastIdle) / dw : 0;
++  lastWall = wall; lastMain = mainT; lastIdle = idle;
++}
++#endif
++// ---- end NX_SAMPLER ----
++
++
++// ---- NX_PERF ----
++#ifdef SDK_BUILD_NX
++// Frame steps, in order. Mark i is taken at the END of step i; step 0 starts at the previous frame's end.
++static const int kNxOrder[] = {0, 1, 2, 6, 7, 8, 9, 3, 4, 10, 11, 5};
++static const char *kNxNames[] = {"game", "3d", "bloom", "vblank", "imgui", "post", "evt+gui", "clear", "scan", "draw2d", "pace", "swap"};
++// step that runs AFTER mark i (for sample tagging)
++static int NxNextStep(int mark) {
++  for (int k = 0; k < 11; k++) if (kNxOrder[k] == mark) return kNxOrder[k + 1];
++  return 0;  // after mark 5: game
++}
++volatile int sNxPhase = -1;  // step currently running (-1 before the first frame)
++static u64 sNxW[12], sNxC[12];         // wall / cpu ticks at each mark this frame
++static u64 sNxAccW[12], sNxAccC[12], sNxMaxW[12];
++static u64 sNxLastW, sNxLastC;          // previous frame end
++static int sNxCount, sNxLines;
++static inline u64 NxCpuTicks() { u64 t = 0; svcGetInfo(&t, InfoType_ThreadTickCount, CUR_THREAD_HANDLE, (u64)-1); return t; }
++static void NxMark(int i) {
++  switch (i) {
++    case 5: NxGpuFrameStart(); break;
++    case 1: NxGpuStamp(1); break;
++    case 2: NxGpuStamp(2); break;
++    case 9: NxGpuStamp(4); break;
++    case 4: NxGpuStamp(5); break;
++  }
++  sNxW[i] = armGetSystemTick();
++  sNxC[i] = NxCpuTicks();
++  sNxPhase = NxNextStep(i);
++}
++static void NxFrameEnd(u64, u64 gpuNs) {
++  static u64 sAccGpu;
++  if (!sNxLastW) { sNxLastW = sNxW[5]; sNxLastC = sNxC[5]; return; }
++  u64 pw = sNxLastW, pc = sNxLastC;
++  for (int k = 0; k < 12; k++) {
++    const int i = kNxOrder[k];
++    const u64 w = sNxW[i] - pw, c = sNxC[i] - pc;
++    sNxAccW[i] += w; sNxAccC[i] += c; if (w > sNxMaxW[i]) sNxMaxW[i] = w;
++    pw = sNxW[i]; pc = sNxC[i];
++  }
++  const u64 frameW = sNxW[5] - sNxLastW, frameC = sNxC[5] - sNxLastC;
++  static u64 sAccFrameW, sAccFrameC;
++  sAccFrameW += frameW; sAccFrameC += frameC; sAccGpu += gpuNs;
++  sNxLastW = sNxW[5]; sNxLastC = sNxC[5];
++  if (++sNxCount < 120) return;
++  if (sNxLines++ < 3000) {
++    if (FILE *f = fopen("sdmc:/switch/pokeplatinum_ss/perf_log.txt", sNxLines == 1 ? "w" : "a")) {
++      const double n = sNxCount, ms = 19200.0;  // system tick = 19.2 MHz
++      if (sNxLines == 1) fprintf(f, "per step: wall/cpu ms (avg over 120 frames); idle = wall - cpu\n");
++      fprintf(f, "fps %5.1f wall %5.1f cpu %5.1f gpu %4.1f |", 19200000.0 * n / (double)sAccFrameW, sAccFrameW / n / ms,
++              sAccFrameC / n / ms, sAccGpu / n / 1e6);
++      for (int k = 0; k < 12; k++) {
++        const int i = kNxOrder[k];
++        fprintf(f, " %s %.1f/%.1f", kNxNames[i], sNxAccW[i] / n / ms, sNxAccC[i] / n / ms);
++      }
++      fprintf(f, " | pbo %.2fMB/%.1f up fb %.1f wait %.2fms", sNxPboBytes / n / 1048576.0, sNxPboUploads / n,
++              sNxPboFallback / n, sNxPboWaitTicks / n / ms);
++      fprintf(f, " copies %.1f", sNxCopies / n); sNxCopies = 0;
++      fprintf(f, " | skipped %.2f/frame", sNxSkipped / n); sNxSkipped = 0;
++      fprintf(f, " | dequeue %.2fms x%.1f fencewait %.2fms defer %d", sNxDequeueTicks / n / ms, sNxDequeues / n,
++              sNxFenceWaitTicks / n / ms, sNxDefer);
++      sNxDequeueTicks = sNxFenceWaitTicks = sNxDequeues = 0;
++      if (sNxGpuFrames) {
++        const double g = (double)sNxGpuFrames;
++        fprintf(f, " | GPU 3d %.2f bloom %.2f aa %.2f compose %.2f imgui %.2f tail %.2f frame %.2f (n %llu)",
++                sNxGpuAcc[0] / g, sNxGpuAcc[1] / g, sNxGpuAcc[2] / g, sNxGpuAcc[3] / g, sNxGpuAcc[4] / g, sNxGpuAcc[5] / g,
++                sNxGpuAcc[6] / g, (unsigned long long)sNxGpuFrames);
++      }
++      for (double &a : sNxGpuAcc) a = 0;
++      sNxGpuFrames = 0;
++      sNxPboBytes = sNxPboUploads = sNxPboFallback = sNxPboWaitTicks = 0;
++      fputc('\n', f);
++      fclose(f);
++    }
++  }
++  for (int i = 0; i < 12; i++) { sNxAccW[i] = sNxAccC[i] = sNxMaxW[i] = 0; }
++  sAccFrameW = sAccFrameC = sAccGpu = 0;
++  sNxCount = 0;
++}
++#define NX_SEG(i) NxMark(i)
++#else
++#define NX_SEG(i) ((void)0)
++#endif
++// ---- end NX_PERF ----
++
++// ---- NX_SKIPDUP ----
++static bool sNxSkipNext;
++extern "C" void SIM_HintDuplicateVBlank(void) { sNxSkipNext = true; }
++static bool sNxLastSkipped;
++extern "C" BOOL SIM_LastVBlankSkipped(void) { return sNxLastSkipped; }
++#ifdef SDK_BUILD_NX
++static int sNxSkipDup = -1;
++static bool sNxPairBudget;  // the next drawn vblank also carries the skipped one's budget
++// The second vblank of a 30 fps tick: same interrupts, DMA and pacing as a drawn one, no drawing.
++static bool NxLightVBlank() {
++  if (sNxSkipDup < 0) { const char *e = getenv("NX_SKIPDUP"); sNxSkipDup = (e && *e == '0') ? 0 : 1; }
++  if (!sNxSkipDup || sFastForwardActive || SIM::GUI::IsEnabled() || G3SIM_SwapBuffersCalledThisFrame()) return false;
++  const u16 savedDisplayStatus = s_reg_GX_DISPSTAT;
++  const u16 statusMask = REG_GX_DISPSTAT_HBLK_MASK | REG_GX_DISPSTAT_VBLK_MASK;
++  for (u32 line = 0; line < SIM_NDS_SCREEN_HEIGHT; line++) {
++    s_reg_GX_VCOUNT = line;
++    s_reg_GX_DISPSTAT &= ~(REG_GX_DISPSTAT_HBLK_MASK | REG_GX_DISPSTAT_VBLK_MASK);
++    s_reg_GX_DISPSTAT |= REG_GX_DISPSTAT_HBLK_MASK;
++    MIi_ExecuteHBlankDma();
++    if ((s_reg_GX_DISPSTAT & REG_GX_DISPSTAT_HBI_MASK) && (OS_GetIrqMask() & OS_IE_H_BLANK))
++      OS_IRQTable[OS_IE_H_BLANK - 1]();
++  }
++  s_reg_GX_DISPSTAT = (s_reg_GX_DISPSTAT & ~statusMask) | (savedDisplayStatus & statusMask);
++  s_reg_GX_VCOUNT = SIM_NDS_SCREEN_HEIGHT;
++  s_reg_GX_DISPSTAT |= REG_GX_DISPSTAT_VBLK_MASK;
++  OS_IRQTable[OS_IE_V_BLANK - 1]();
++  s_HW_INTR_CHECK_BUF |= 1;
++  *((u32 *)HW_VBLANK_COUNT_BUF) = *((u32 *)HW_VBLANK_COUNT_BUF) + 1;
++  for (u32 line = SIM_NDS_SCREEN_HEIGHT; line < 263; line++) {
++    s_reg_GX_VCOUNT = line;
++    s_reg_GX_DISPSTAT |= REG_GX_DISPSTAT_HBLK_MASK;
++    if ((s_reg_GX_DISPSTAT & REG_GX_DISPSTAT_HBI_MASK) && (OS_GetIrqMask() & OS_IE_H_BLANK))
++      OS_IRQTable[OS_IE_H_BLANK - 1]();
++    s_reg_GX_DISPSTAT &= ~REG_GX_DISPSTAT_HBLK_MASK;
++  }
++  s_reg_GX_VCOUNT = SIM_NDS_SCREEN_HEIGHT;
++  s_reg_GX_DISPSTAT = (s_reg_GX_DISPSTAT & ~statusMask) | (savedDisplayStatus & statusMask);
++  // Paced once per tick: the drawn vblank that follows waits for both vblanks' budget.
++  sNxPairBudget = true;
++  sNxSkipped++;
++  return true;
++}
++#endif
++// ---- end NX_SKIPDUP ----
++
+ void *SIM_Render(void *arg) {
++#ifdef SDK_BUILD_NX
++  sNxLastSkipped = false;
++  if (sNxSkipNext) { sNxSkipNext = false; if (NxLightVBlank()) { sNxLastSkipped = true; return NULL; } }
++#else
++  sNxSkipNext = false;
++#endif
++  NX_SEG(0);
++  { static int sNxFrames = 0; if (sNxFrames < 5 || sNxFrames % 600 == 0) { char b[64]; snprintf(b, sizeof b, "frame %d", sNxFrames); NX_BootTrace(b); } sNxFrames++; }
+   SIM_Crash_SetPhase("render");
+ 
+   SDL_Event Event;
+@@ -1924,6 +2555,7 @@ void *SIM_Render(void *arg) {
+   // Draw the translucent 3D stuff
+   G3SIM_DrawItems();
+   s3DTarget.Resolve(g3FrameBuffer);
++  NX_SEG(1);
+   sFieldCoverageApplied = sFieldCoverageRepair && s_SIM_config.internalResolutionScale == 1
+       && !s3DTarget.Enabled() && sFieldCoverage.Ready();
+   if (sFieldCoverageApplied) sFieldCoverage.Run(g3RenderTextureId, g3FogTextureId);
+@@ -1932,6 +2564,7 @@ void *SIM_Render(void *arg) {
+     sBloom.Run(g3EmissionTextureId, s_MaxViewWidth * s_SIM_config.internalResolutionScale,
+         SIM_NDS_SCREEN_HEIGHT * 2 * s_SIM_config.internalResolutionScale);
+   }
++  NX_SEG(2);
+   // At large internal resolutions, average the supersampled world instead of
+   // selecting just four source texels. This also smooths edges when the MSAA
+   // memory budget is exceeded. Sprite/UI layer textures keep their own filters.
+@@ -1959,6 +2592,14 @@ void *SIM_Render(void *arg) {
+ 
+     // Unbind 3D Framebuffer
+     glBindFramebuffer(GL_FRAMEBUFFER, 0);
++#ifdef SDK_BUILD_NX
++    if (sNxDefer == 1) {  // NX: first window write of the frame: wait for the buffer, then clear it
++      NxWaitWindowFence();
++      NxGpuStamp(3);
++      glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
++      glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
++    }
++#endif
+     glBindRenderbuffer(GL_RENDERBUFFER, 0);
+     glUseProgram(g2shaderProgramID);
+ 
+@@ -2297,6 +2938,7 @@ void *SIM_Render(void *arg) {
+     SIM::GUI::Main();
+     if (SIM::GUI::ConsumeInputReset()) ReleaseGameplayInput();
+     UpdateFastForward(window);
++    NX_SEG(6);
+ 
+     memset(bgtex, 0,
+            sizeof(u8) * 4 * SIM_NDS_SCREEN_WIDTH * SIM_NDS_SCREEN_HEIGHT * 2);
+@@ -2317,6 +2959,7 @@ void *SIM_Render(void *arg) {
+     memset(bg3stex, 0,
+            sizeof(u8) * 4 * SIM_NDS_SCREEN_WIDTH * SIM_NDS_SCREEN_HEIGHT * 2);
+ 
++    NX_SEG(7);
+     // HBlank prepares the registers for the next scanline. Capture both
+     // engines before each callback, with real VCOUNT and HBlank status.
+     const u16 savedDisplayStatus = s_reg_GX_DISPSTAT;
+@@ -2333,12 +2976,14 @@ void *SIM_Render(void *arg) {
+     s_reg_GX_DISPSTAT = (s_reg_GX_DISPSTAT & ~statusMask) | (savedDisplayStatus & statusMask);
+     s_reg_GX_VCOUNT = SIM_NDS_SCREEN_HEIGHT;
+ 
++    NX_SEG(8);
+     // Draw MAIN engine
+     DrawEngine(FALSE);
+ 
+     // SUB engine
+     DrawEngine(TRUE);
+ 
++    NX_SEG(9);
+     // Run VBlank Interrupt
+     s_reg_GX_DISPSTAT |= REG_GX_DISPSTAT_VBLK_MASK;
+     OS_IRQTable[OS_IE_V_BLANK - 1]();
+@@ -2356,7 +3001,9 @@ void *SIM_Render(void *arg) {
+     s_reg_GX_VCOUNT = SIM_NDS_SCREEN_HEIGHT;
+     s_reg_GX_DISPSTAT = (s_reg_GX_DISPSTAT & ~statusMask) | (savedDisplayStatus & statusMask);
+ 
++    NX_SEG(3);
+     SIM::GUI::Render();
++    NX_SEG(4);
+ 
+     // Calculate frametime
+     struct timespec curTime;
+@@ -2372,9 +3019,13 @@ void *SIM_Render(void *arg) {
+     EndGPUProfile();
+     const bool paced = sFastForwardActive || s_SIM_config.capFrameRate;
+     const int swapInterval = SDL_GL_GetSwapInterval();
+-    const u64 budget = sFastForwardActive
++    u64 budget = sFastForwardActive
+                           ? (u64)(sNormalFrameBudgetNs / sEffectiveSpeed)
+                           : sNormalFrameBudgetNs;
++#ifdef SDK_BUILD_NX
++    if (sNxPairBudget) budget *= 2;  // NX: this tick's skipped vblank was not paced
++    sNxPairBudget = false;
++#endif
+     const u64 frameStart = (u64)s_SIM_lastFrameEnd.tv_sec * 1000000000 + s_SIM_lastFrameEnd.tv_nsec;
+     u64 deadline = paced ? sFramePacer.target(frameStart, budget, swapInterval) : 0;
+     if (!paced) sFramePacer.reset();
+@@ -2385,7 +3036,12 @@ void *SIM_Render(void *arg) {
+     if (paced && swapInterval == 0) WaitForFrameDeadline(deadline);
+     const u64 profileSwapStart = SIM_ProfileNow();
+     SIM_Autopilot_BeforeSwap(drawableWidth, drawableHeight);
++#ifdef SDK_BUILD_NX
++    NxPboFrameEnd();
++#endif
++    NX_SEG(10);
+     SDL_GL_SwapWindow(window);
++    NX_SEG(11);
+     const u64 profileSwapEnd = SIM_ProfileNow();
+     if (paced && swapInterval != 0) WaitForFrameDeadline(deadline);
+     const u64 profileWaitEnd = SIM_ProfileNow();
+@@ -2399,6 +3055,10 @@ void *SIM_Render(void *arg) {
+     frameNs = ((curTime.tv_sec - s_SIM_lastFrameEnd.tv_sec) * 1000000000) +
+               (curTime.tv_nsec - s_SIM_lastFrameEnd.tv_nsec);
+     sFullFrameTime = frameNs;
++#ifdef SDK_BUILD_NX
++    NX_SEG(5);
++    NxFrameEnd((u64)s_SIM_lastFrameEnd.tv_sec * 1000000000ull + s_SIM_lastFrameEnd.tv_nsec, sGPUHasResult ? sLastGPUNs : 0);
++#endif
+     SIM_ProfileFrame(sRenderFrameTime, profileSwapStart - profileWaitStart + profileWaitEnd - profileSwapEnd, profileSwapEnd - profileSwapStart, frameNs, SDL_GL_GetSwapInterval(), sEffectiveSpeed);
+ 
+ 
+@@ -2408,12 +3068,24 @@ void *SIM_Render(void *arg) {
+ #endif
+ 
+     s_numG3CommandsThisFrame = 0;
++#ifdef SDK_BUILD_NX
++    if (sNxDefer != 1) {  // NX: with fence deferral the window is cleared just before the compositor
++#endif
+     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
++#ifdef SDK_BUILD_NX
++    }
++#endif
+     s_curPolygonAttr.alpha = 1.0f;
+ 
++#ifdef SDK_BUILD_NX
++    if (sNxDefer != 1) {
++#endif
+     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
++#ifdef SDK_BUILD_NX
++    }
++#endif
+ 
+     SIM_Crash_Heartbeat();
+   } while (SIM::GUI::IsGameLogicPaused());
+@@ -2500,10 +3172,48 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline,
+ }
+ #endif
+ 
++// ---- NX_BOOT_TRACE ----
++#ifdef SDK_BUILD_NX
++#include <unistd.h>
++#include <time.h>
++#include <stdio.h>
++extern "C" int setenv(const char *, const char *, int);  // NX: newlib hides setenv in strict mode
++extern "C" void NX_BootTrace(const char *what) {
++  static int sLines = 0;
++  if (sLines > 200) return;
++  FILE *f = fopen("sdmc:/switch/pokeplatinum_ss/boot_trace.txt", sLines++ ? "a" : "w");
++  if (!f) return;
++  struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t);
++  fprintf(f, "%5ld.%03ld %s\n", (long)t.tv_sec, t.tv_nsec / 1000000, what);
++  fclose(f);
++}
++__attribute__((constructor)) static void NX_BootTraceCtor() { NX_BootTrace("static init"); }
++#else
++extern "C" void NX_BootTrace(const char *) {}
++#endif
++// ---- end NX_BOOT_TRACE ----
++
+ int main(int argc, char *argv[]) {
+ #ifdef SDK_BUILD_NX
++  { char cwd[512] = {0}; getcwd(cwd, sizeof cwd); char b[600]; snprintf(b, sizeof b, "main: cwd=%s argc=%d", cwd, argc); NX_BootTrace(b); }
+   // Start up libnx sockets
+   socketInitializeDefault();
++  {  // NX: profiler output on SD; nx_env.txt holds KEY=VALUE tweaks (e.g. mesa_glthread=true)
++    // Per-frame traces are opt-in: set PLATINUM_FRAME_TRACE / PLATINUM_GPU_TRACE in nx_env.txt.
++    if (FILE *ef = fopen("sdmc:/switch/pokeplatinum_ss/nx_env.txt", "r")) {
++      char line[256];
++      while (fgets(line, sizeof line, ef)) {
++        char *e = line + strcspn(line, "\r\n"); *e = 0;
++        if (line[0] == '#' || !line[0]) continue;
++        char *eq = strchr(line, '=');
++        if (!eq) continue;
++        *eq = 0; setenv(line, eq + 1, 1);
++        char b[300]; snprintf(b, sizeof b, "env: %s=%s", line, eq + 1); NX_BootTrace(b);
++      }
++      fclose(ef);
++    }
++  }
++  NxSamplerStart();
+ #endif
+ 
+ #ifdef TRACY_ENABLE
+@@ -2542,6 +3252,13 @@ int main(int argc, char *argv[]) {
+     return 0;
+   }
+ 
++  NX_BootTrace("config loaded");
++#ifdef SDK_BUILD_NX
++  if (const char *v = getenv("NX_VSYNC")) {  // NX: test override, not saved unless the GUI saves
++    s_SIM_config.vsyncInterval = atoi(v);
++    char b[48]; snprintf(b, sizeof b, "vsync override %d", s_SIM_config.vsyncInterval); NX_BootTrace(b);
++  }
++#endif
+   if (s_SIM_config.writeLogFile) SIM_Log_Open();
+   SIM_Crash_Install(s_SIM_config.crashHandler, s_SIM_config.stallWatchdogSeconds);
+ 
+@@ -2637,7 +3354,9 @@ int main(int argc, char *argv[]) {
+   SetConsoleOutputCP(65001);
+ #endif
+ 
++  NX_BootTrace("render init start");
+   SIM_RenderInit(NULL);
++  NX_BootTrace(glGetString ? (const char *)glGetString(GL_VERSION) : "render init: NO GL");
+   if (FILE *log = SIM_Log_File()) {
+     // glGetString is a null pointer when no context could be made
+     if (glGetString) {
+@@ -2674,6 +3393,7 @@ int main(int argc, char *argv[]) {
+     }
+   }
+ 
++  NX_BootTrace("NitroMain");
+   NitroMain();
+   return 0;
+ }
+diff --git a/libraries/sim/src/sim_net.cpp b/libraries/sim/src/sim_net.cpp
+index 963b00b..5eb3aee 100644
+--- a/libraries/sim/src/sim_net.cpp
++++ b/libraries/sim/src/sim_net.cpp
+@@ -1,3 +1,6 @@
++#ifdef __SWITCH__
++#include <sys/select.h>  // NX: enet/unix.h needs fd_set
++#endif
+ #include <enet/enet.h>
+ #include <nitro.h>
+ #include <simulator/sim.h>

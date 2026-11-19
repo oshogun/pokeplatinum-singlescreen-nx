@@ -13,7 +13,7 @@ void TextureResourceManager_FreeSlot(FieldTextureManager *textureManager, int sl
 void TextureResourceManager_FreeAllSlots(FieldTextureManager *textureManager);
 void TextureResourceManager_Destroy(FieldTextureManager *textureManager);
 
-#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64)
+#if defined(SDK_BUILD_LINUX) || defined(SDK_BUILD_WIN64) || defined(SDK_BUILD_NX)
 FieldTextureManager *TextureResourceManager_CreateOnHeap(enum HeapID heapID);
 #endif
 

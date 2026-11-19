@@ -13,7 +13,7 @@ libdwcilobby = static_library('dwcilobby',
     include_directories: [public_includes, ppwlobby_public_includes],
     dependencies: [nitrosdk_dep, nitrodwc_dep, nitrowifi_dep],
     pic: false,
-    native: true
+    native: game_native
 )
 
 ppwlobby_libs += libdwcilobby

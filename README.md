@@ -51,7 +51,7 @@ These come from the single-screen mod:
 
 ## Settings (press ZL)
 
-ZL opens the settings overlay. Navigate it with the controller, or by touch in handheld mode.
+ZL opens the settings overlay. Navigate it with the controller; touch input isn't supported.
 
 | Page | What's there |
 | --- | --- |
